@@ -99,14 +99,11 @@ window.wp = window.wp || {};
 
 				editorHeight = parseInt( textarea.style.height, 10 ) || 0;
 
+				// Save the selection
+				addHTMLBookmarkInTextAreaContent( $textarea, $ );
+
 				if ( editor ) {
-					// Save the selection
-					addHTMLBookmarkInTextAreaContent( editor );
-
 					editor.show();
-
-					// Restore the selection after showing the editor
-					focusHTMLBookmarkInVisualEditor( editor );
 
 					// No point to resize the iframe in iOS.
 					if ( ! tinymce.Env.iOS && editorHeight ) {
@@ -118,8 +115,35 @@ window.wp = window.wp || {};
 							editor.theme.resizeTo( null, editorHeight );
 						}
 					}
+
+					// Restore the selection
+					focusHTMLBookmarkInVisualEditor( editor );
 				} else {
-					tinymce.init( window.tinyMCEPreInit.mceInit[id] );
+					/**
+					 * TinyMCE is still not loaded. In order to restore the selection
+					 * when the editor loads, a `on('init')` event is added, that will
+					 * do the restoration.
+					 *
+					 * To achieve that, the initialization config is cloned and extended
+					 * to include the `setup` method, which makes it possible to add the
+					 * `on('init')` event.
+					 *
+					 * Cloning is used to prevent modification of the original init config,
+					 * which may cause unwanted side effects.
+					 */
+					var tinyMCEConfig = $.extend(
+						{},
+						window.tinyMCEPreInit.mceInit[id],
+						{
+							setup: function(editor) {
+								editor.on('init', function(event) {
+									focusHTMLBookmarkInVisualEditor( event.target );
+								});
+							}
+						}
+					);
+
+					tinymce.init( tinyMCEConfig );
 				}
 
 				wrap.removeClass( 'html-active' ).addClass( 'tmce-active' );
@@ -272,8 +296,8 @@ window.wp = window.wp || {};
 		}
 
 		// TODO fix when the editor is not loaded - loses selection
-		function addHTMLBookmarkInTextAreaContent( editor ) {
-			var textArea = editor.getElement(),
+		function addHTMLBookmarkInTextAreaContent( $textarea, jQuery ) {
+			var textArea = $textarea[ 0 ], // TODO add error checking
 				htmlModeCursorStartPosition = textArea.selectionStart,
 				htmlModeCursorEndPosition = textArea.selectionEnd;
 
@@ -295,7 +319,7 @@ window.wp = window.wp || {};
 					: 'single';
 
 			var selectedText = null;
-			var cursorMarkerSkeleton = getCursorMarkerSpan( editor, '&#65279;' );
+			var cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
 
 			if ( mode === 'range' ) {
 				var bookMarkEnd = cursorMarkerSkeleton.clone()
