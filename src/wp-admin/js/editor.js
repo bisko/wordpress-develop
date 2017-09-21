@@ -948,16 +948,16 @@ window.wp = window.wp || {};
 			var $textarea = $( '#' + id );
 
 			var $wrap = $( '<div>' ).attr( {
-						'class': 'wp-core-ui wp-editor-wrap tmce-active',
-						id: 'wp-' + id + '-wrap'
-					} );
+					'class': 'wp-core-ui wp-editor-wrap tmce-active',
+					id: 'wp-' + id + '-wrap'
+				} );
 
 			var $editorContainer = $( '<div class="wp-editor-container">' );
 
 			var $button = $( '<button>' ).attr( {
-							type: 'button',
-							'data-wp-editor-id': id
-						} );
+					type: 'button',
+					'data-wp-editor-id': id
+				} );
 
 			var $editorTools = $( '<div class="wp-editor-tools">' );
 
