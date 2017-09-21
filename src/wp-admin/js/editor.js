@@ -100,7 +100,13 @@ window.wp = window.wp || {};
 				editorHeight = parseInt( textarea.style.height, 10 ) || 0;
 
 				if ( editor ) {
+					// Save the selection
+					addHTMLBookmarkInTextAreaContent( editor );
+
 					editor.show();
+
+					// Restore the selection after showing the editor
+					focusHTMLBookmarkInVisualEditor( editor );
 
 					// No point to resize the iframe in iOS.
 					if ( ! tinymce.Env.iOS && editorHeight ) {
@@ -126,6 +132,7 @@ window.wp = window.wp || {};
 					return false;
 				}
 
+				var selectionRange = null;
 				if ( editor ) {
 					// Don't resize the textarea in iOS. The iframe is forced to 100% height there, we shouldn't match it.
 					if ( ! tinymce.Env.iOS ) {
@@ -143,7 +150,13 @@ window.wp = window.wp || {};
 						}
 					}
 
+					selectionRange = findBookmarkedPosition( editor );
+
 					editor.hide();
+
+					if ( selectionRange ) {
+						selectTextInTextArea( editor, selectionRange );
+					}
 				} else {
 					// There is probably a JS error on the page. The TinyMCE editor instance doesn't exist. Show the textarea.
 					$textarea.css({ 'display': '', 'visibility': '' });
@@ -154,6 +167,328 @@ window.wp = window.wp || {};
 				window.setUserSetting( 'editor', 'html' );
 			}
 		}
+
+		/**
+		 * SELECTION KEEPING START
+		 */
+
+		function getContainingTagInfo( content, cursorPosition ) {
+			var lastLtPos = content.lastIndexOf( '<', cursorPosition ),
+				lastGtPos = content.lastIndexOf( '>', cursorPosition );
+
+			if ( lastLtPos > lastGtPos ) {
+				// inside a tag that was opened, but not closed
+
+				// find what the tag is
+				var tagContent = content.substr( lastLtPos );
+				var tagMatch = tagContent.match( /<\s*(\/)?(\w+)/ );
+				if ( ! tagMatch ) {
+					return null;
+				}
+
+				var tagType = tagMatch[ 2 ];
+				var closingGt = tagContent.indexOf( '>' );
+				var isClosingTag = ! ! tagMatch[ 1 ];
+				var shortcodeWrapperInfo = getShortcodeWrapperInfo( content, lastLtPos );
+
+				return {
+					ltPos: lastLtPos,
+					gtPos: lastLtPos + closingGt + 1, // offset by one to get the position _after_ the character,
+					tagType: tagType,
+					isClosingTag: isClosingTag,
+					shortcodeTagInfo: shortcodeWrapperInfo
+				};
+			}
+			return null;
+		}
+
+		/**
+		 * If the cursor is inside a shortcode wrapping tag, e.g. `[caption]` it's better to
+		 * move the selection marker to before the short tag.
+		 *
+		 * For example `[caption]` rewrites/removes anything that's between the `[caption]` tag and the
+		 * `<img/>` tag inside.
+		 *
+		 * 	`[caption]<span>ThisIsGone</span><img .../>[caption]`
+		 *
+		 * 	Moving the selection to before the short code is better, since it allows to select
+		 * 	something, instead of just losing focus and going to the start of the content.
+		 */
+		// TODO make it work properly
+		function getShortcodeWrapperInfo( content, cursorPosition ) {
+			if ( content.substr( cursorPosition - 1, 1 ) === ']' ) {
+				var shortTagStart = content.lastIndexOf( '[', cursorPosition );
+				var shortTagContent = content.substr(shortTagStart, cursorPosition - shortTagStart);
+				var shortTag = content.match( /\[\s*(\/)?(\w+)/ );
+				var tagType = shortTag[ 2 ];
+				var closingGt = shortTagContent.indexOf( '>' );
+				var isClosingTag = ! ! shortTag[ 1 ];
+
+				return {
+					openingBracket: shortTagStart,
+					shortcode: tagType,
+					closingBracket: closingGt,
+					isClosingTag: isClosingTag
+				}
+			}
+
+			return null;
+		}
+
+		function getCursorMarkerSpan( editor, content ) {
+			return editor.$( '<span>' ).css( {
+				display: 'inline-block',
+				width: 0,
+				overflow: 'hidden',
+				'line-height': 0
+			} )
+				.html( content ? content : '' );
+		}
+
+		function selectTextInTextArea( editor, selection ) {
+			// only valid in the text area mode and if we have selection
+			if ( ! selection ) {
+				return;
+			}
+
+			var textNode = editor.getElement(),
+				start = selection.start,
+				end = selection.end || selection.start;
+
+			if ( textNode.focus ) {
+				// focus and scroll to the position
+				setTimeout( function() {
+					if ( textNode.blur ) {
+						// defocus before focusing
+						textNode.blur();
+					}
+					textNode.focus(); // TODO check browser compatibility
+				}, 100 );
+
+				textNode.focus(); // TODO check browser compatibility
+			}
+
+			textNode.setSelectionRange( start, end );
+		}
+
+		// TODO fix when the editor is not loaded - loses selection
+		function addHTMLBookmarkInTextAreaContent( editor ) {
+			var textArea = editor.getElement(),
+				htmlModeCursorStartPosition = textArea.selectionStart,
+				htmlModeCursorEndPosition = textArea.selectionEnd;
+
+
+			// check if the cursor is in a tag and if so, adjust it
+			var isCursorStartInTag = getContainingTagInfo( textArea.value, htmlModeCursorStartPosition );
+			if ( isCursorStartInTag ) {
+				htmlModeCursorStartPosition = isCursorStartInTag.ltPos;
+			}
+
+			var isCursorEndInTag = getContainingTagInfo( textArea.value, htmlModeCursorEndPosition );
+			if ( isCursorEndInTag ) {
+				htmlModeCursorEndPosition = isCursorEndInTag.gtPos;
+			}
+
+			var mode =
+				htmlModeCursorStartPosition !== htmlModeCursorEndPosition
+					? 'range'
+					: 'single';
+
+			var selectedText = null;
+			var cursorMarkerSkeleton = getCursorMarkerSpan( editor, '&#65279;' )
+				.attr('data-mce-type', 'bookmark');
+
+			if ( mode === 'range' ) {
+				var bookMarkEnd = cursorMarkerSkeleton.clone()
+					.attr('id', 'mce_SELREST_end')[0].outerHTML;
+
+				selectedText = [
+					textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition ),
+					bookMarkEnd
+				].join( '' );
+			}
+
+			textArea.value = [
+				textArea.value.slice( 0, htmlModeCursorStartPosition ), // text until the cursor/selection position
+				cursorMarkerSkeleton.clone()							// cursor/selection start marker
+					.attr('id', 'mce_SELREST_start')[0].outerHTML,
+				selectedText, 											// selected text with end cursor/position marker
+				textArea.value.slice( htmlModeCursorEndPosition )		// text from last cursor/selection position to end
+			].join( '' );
+		}
+
+		function focusHTMLBookmarkInVisualEditor( editor ) {
+			var startNode = editor.$( '#mce_SELREST_start' ),
+				endNode = editor.$( '#mce_SELREST_end' );
+
+			if ( ! startNode.length ) {
+				return;
+			}
+
+			editor.focus();
+
+			if ( ! endNode.length ) {
+				editor.selection.select( startNode[ 0 ] );
+			} else {
+				const selection = document.createRange();
+
+				selection.setStart( startNode[ 0 ], 0 );
+				selection.setEnd( endNode[ 0 ], 0 );
+
+				editor.selection.setRng( selection );
+				endNode.remove();
+			}
+
+			scrollVisualModeToStartElement( editor, startNode );
+			startNode.remove();
+		}
+
+		function scrollVisualModeToStartElement( editor, element ) {
+			/**
+			 * TODO:
+			 *  * Decide if we should animate the transition or not ( motion sickness/accessibility )
+			 *  * Decide how much to actually scroll. Sometimes the content above the editor appears when the scroll
+			 *  happens. Probably will be best to scroll to the top of the editor at max, not more.
+			 */
+			var elementTop = editor.$( element ).offset().top;
+
+			var windowHeight = window.innerHeight
+				|| document.documentElement.clientHeight
+				|| document.body.clientHeight;
+
+			$( 'body' ).animate( {
+				scrollTop: parseInt( elementTop - windowHeight / 8, 10 )
+			}, 100 );
+		}
+
+		function fixTextAreaContent( event ) {
+			// Keep empty paragraphs :(
+			event.content = event.content.replace( /<p>(?:<br ?\/?>|\u00a0|\uFEFF| )*<\/p>/g, '<p>&nbsp;</p>' );
+		}
+
+		/**
+		 * Finds the current selection position in the Visual editor.
+		 *
+		 * It uses some black magic raw JS trickery. Not for the faint-hearted.
+		 *
+		 * @param {Object} editor The editor where we must find the selection
+		 * @returns {null | Object} The selection range position in the editor
+		 */
+		function findBookmarkedPosition( editor ) {
+			// Get the TinyMCE `window` reference, since we need to access the raw selection.
+			var TinyMCEWIndow = editor.getWin(),
+				selection = TinyMCEWIndow.getSelection();
+
+			if ( selection.rangeCount <= 0 ) {
+				// no selection, no need to continue.
+				return;
+			}
+
+			/**
+			 * The ID is used to avoid replacing user generated content, that may coincide with the
+			 * format specified below.
+			 * @type {string}
+			 */
+			var selectionID = 'SELRES_' + Math.random(); // TODO add UUID if low overhead
+
+			/**
+			 * Create two marker elements that will be used to mark the start and the end of the range.
+			 *
+			 * The elements have hardcoded style that makes them invisible. This is done to avoid seeing
+			 * random content flickering in the editor when switching between modes.
+			 */
+			var spanSkeleton = getCursorMarkerSpan(editor, selectionID);
+
+			var startElement = spanSkeleton.clone().addClass('mce_SELRES_start');
+			var endElement = spanSkeleton.clone().addClass('mce_SELRES_end');
+
+			/**
+			 * Black magic start.
+			 *
+			 * Inspired by https://stackoverflow.com/a/17497803/153310
+			 *
+			 * Why do it this way and not with TinyMCE's bookmarks?
+			 *
+			 * TinyMCE's bookmarks are very nice when working with selections and positions, BUT
+			 * there is no way to determine the precise position of the bookmark when switching modes, since
+			 * TinyMCE does some serialization of the content, to fix things like shortcodes, run plugins, prettify
+			 * HTML code and so on. In this process, the bookmark markup gets lost.
+			 *
+			 * If we decide to hook right after the bookmark is added, we can see where the bookmark is in the raw HTML
+			 * in TinyMCE. Unfortunately this state is before the serialization, so any visual markup in the content will
+			 * throw off the positioning.
+			 *
+			 * To avoid this, we insert two custom `span`s that will serve as the markers at the beginning and end of the
+			 * selection.
+			 *
+			 * Why not use TinyMCE's selection API or the DOM API to wrap the contents? Because if we do that, this creates
+			 * a new node, which is inserted in the dom. Now this will be fine, if we worked with fixed selections to
+			 * full nodes. Unfortunately in our case, the user can select whatever they like, which means that the
+			 * selection may start in the middle of one node and end in the middle of a completely different one. If we
+			 * wrap the selection in another node, this will create artifacts in the content.
+			 *
+			 * Using the method below, we insert the custom `span` nodes at the start and at the end of the selection.
+			 * This helps us not break the content and also gives us the option to work with multi-node selections without
+			 * breaking the markup.
+			 */
+			var range = selection.getRangeAt( 0 ),
+				startNode = range.startContainer,
+				startOffset = range.startOffset,
+				boundaryRange = range.cloneRange();
+
+			boundaryRange.collapse( false );
+			boundaryRange.insertNode( endElement[0] );
+			boundaryRange.setStart( startNode, startOffset );
+			boundaryRange.collapse( true );
+			boundaryRange.insertNode( startElement[0] );
+
+			range.setStartAfter( startElement[0] );
+			range.setEndBefore( endElement[0] );
+			selection.removeAllRanges();
+			selection.addRange( range );
+
+			/**
+			 * Now the editor's content has the start/end nodes.
+			 *
+			 * Unfortunately the content goes through some more changes after this step, before it gets inserted
+			 * in the `textarea`. This means that we have to do some minor cleanup on our own here.
+			 */
+			editor.on( 'GetContent', fixTextAreaContent );
+
+			var content = removep( editor.getContent() );
+
+			editor.off( 'GetContent', fixTextAreaContent );
+
+			startElement.remove();
+			endElement.remove();
+
+			var startRegex = new RegExp(
+				'<span[^>]*\\s*class="mce_SELRES_start"[^>]+>\\s*' + selectionID + '[^<]*<\\/span>'
+			);
+
+			var endRegex = new RegExp(
+				'<span[^>]*\\s*class="mce_SELRES_end"[^>]+>\\s*' + selectionID + '[^<]*<\\/span>'
+			);
+
+			var startMatch = content.match( startRegex );
+			var endMatch = content.match( endRegex );
+			if ( ! startMatch ) {
+				return null;
+			}
+
+			return {
+				start: startMatch.index,
+
+				// We need to adjust the end position to discard the length of the range start marker
+				end: endMatch
+					? endMatch.index - startMatch[ 0 ].length
+					: null
+			};
+		}
+
+		/**
+		 * SELECTION KEEPING END
+		 */
 
 		/**
 		 * @summary Replaces <p> tags with two line breaks. "Opposite" of wpautop().
@@ -564,16 +899,16 @@ window.wp = window.wp || {};
 			var $textarea = $( '#' + id );
 
 			var $wrap = $( '<div>' ).attr( {
-					'class': 'wp-core-ui wp-editor-wrap tmce-active',
-					id: 'wp-' + id + '-wrap'
-				} );
+				'class': 'wp-core-ui wp-editor-wrap tmce-active',
+				id: 'wp-' + id + '-wrap'
+			} );
 
 			var $editorContainer = $( '<div class="wp-editor-container">' );
 
 			var $button = $( '<button>' ).attr( {
-					type: 'button',
-					'data-wp-editor-id': id
-				} );
+				type: 'button',
+				'data-wp-editor-id': id
+			} );
 
 			var $editorTools = $( '<div class="wp-editor-tools">' );
 
