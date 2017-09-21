@@ -238,7 +238,6 @@ window.wp = window.wp || {};
 		 * 	Moving the selection to before the short code is better, since it allows to select
 		 * 	something, instead of just losing focus and going to the start of the content.
 		 */
-		// TODO make it work properly
 		function getShortcodeWrapperInfo( content, cursorPosition ) {
 			if ( content.substr( cursorPosition - 1, 1 ) === ']' ) {
 				var shortTagStart = content.lastIndexOf( '[', cursorPosition );
@@ -295,7 +294,6 @@ window.wp = window.wp || {};
 			textNode.setSelectionRange( start, end );
 		}
 
-		// TODO fix when the editor is not loaded - loses selection
 		function addHTMLBookmarkInTextAreaContent( $textarea, jQuery ) {
 			var textArea = $textarea[ 0 ], // TODO add error checking
 				htmlModeCursorStartPosition = textArea.selectionStart,
@@ -325,8 +323,28 @@ window.wp = window.wp || {};
 				var bookMarkEnd = cursorMarkerSkeleton.clone()
 					.attr('id', 'mce_SELREST_end')[0].outerHTML;
 
+				var markedText = textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition );
+
+				if ( isCursorStartInTag && isCursorStartInTag.shortcodeTagInfo ) {
+					var tagEndPosition = isCursorStartInTag.gtPos - isCursorStartInTag.ltPos;
+					var tagContent = markedText.slice( 0, tagEndPosition );
+					var classMatch = /class=(['"])([^$1]+?)\1/;
+
+					if ( tagContent.match( classMatch ) ) {
+						tagContent = tagContent.replace( classMatch, 'class=$1$2 mce_SELREST_start_target$1' )
+					}
+					else {
+						tagContent = tagContent.replace( /(<\w+)/, '$1 class="mce_SELREST_start_target" ' )
+					}
+
+					markedText = [
+						tagContent,
+						markedText.substr( tagEndPosition )
+					].join( '' );
+				}
+
 				selectedText = [
-					textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition ),
+					markedText,
 					bookMarkEnd
 				].join( '' );
 			}
@@ -345,25 +363,33 @@ window.wp = window.wp || {};
 				endNode = editor.$( '#mce_SELREST_end' );
 
 			if ( ! startNode.length ) {
-				return;
+				startNode = editor.$( '.mce_SELREST_start_target' );
 			}
 
-			editor.focus();
+			if ( startNode.length ) {
+				editor.focus();
 
-			if ( ! endNode.length ) {
-				editor.selection.select( startNode[ 0 ] );
-			} else {
-				const selection = document.createRange();
+				if ( ! endNode.length ) {
+					editor.selection.select( startNode[ 0 ] );
+				} else {
+					const selection = document.createRange();
 
-				selection.setStart( startNode[ 0 ], 0 );
-				selection.setEnd( endNode[ 0 ], 0 );
+					selection.setStart( startNode[ 0 ], 0 );
+					selection.setEnd( endNode[ 0 ], 0 );
 
-				editor.selection.setRng( selection );
-				endNode.remove();
+					editor.selection.setRng( selection );
+				}
+
+				scrollVisualModeToStartElement( editor, startNode );
 			}
 
-			scrollVisualModeToStartElement( editor, startNode );
-			startNode.remove();
+			if ( startNode.hasClass( 'mce_SELREST_start_target' ) ) {
+				startNode.removeClass( 'mce_SELREST_start_target' );
+			}
+			else {
+				startNode.remove();
+			}
+			endNode.remove();
 		}
 
 		function scrollVisualModeToStartElement( editor, element ) {
