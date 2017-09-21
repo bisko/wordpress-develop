@@ -295,8 +295,7 @@ window.wp = window.wp || {};
 					: 'single';
 
 			var selectedText = null;
-			var cursorMarkerSkeleton = getCursorMarkerSpan( editor, '&#65279;' )
-				.attr('data-mce-type', 'bookmark');
+			var cursorMarkerSkeleton = getCursorMarkerSpan( editor, '&#65279;' );
 
 			if ( mode === 'range' ) {
 				var bookMarkEnd = cursorMarkerSkeleton.clone()
