@@ -334,7 +334,7 @@ window.wp = window.wp || {};
 					var tagContent = markedText.slice( 0, tagEndPosition );
 
 					// Check if the tag already has a `class` attribute.
-					var classMatch = /class=(['"])([^$1]+?)\1/;
+					var classMatch = /class=(['"])([^$1]*?)\1/;
 
 					/**
 					 * Add a marker class to the selected tag, to be used later.
