@@ -320,16 +320,27 @@ window.wp = window.wp || {};
 			var cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
 
 			if ( mode === 'range' ) {
-				var bookMarkEnd = cursorMarkerSkeleton.clone()
-					.attr('id', 'mce_SELREST_end')[0].outerHTML;
-
 				var markedText = textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition );
 
+				/**
+				 * Since the shortcodes convert the tags in them a bit, we need to mark the tag itself,
+				 * and not rely on the cursor marker.
+				 *
+				 * @see getShortcodeWrapperInfo
+				 */
 				if ( isCursorStartInTag && isCursorStartInTag.shortcodeTagInfo ) {
+					// Get the tag on the cursor start
 					var tagEndPosition = isCursorStartInTag.gtPos - isCursorStartInTag.ltPos;
 					var tagContent = markedText.slice( 0, tagEndPosition );
+
+					// Check if the tag already has a `class` attribute.
 					var classMatch = /class=(['"])([^$1]+?)\1/;
 
+					/**
+					 * Add a marker class to the selected tag, to be used later.
+					 *
+					 * @see focusHTMLBookmarkInVisualEditor
+					 */
 					if ( tagContent.match( classMatch ) ) {
 						tagContent = tagContent.replace( classMatch, 'class=$1$2 mce_SELREST_start_target$1' )
 					}
@@ -337,10 +348,30 @@ window.wp = window.wp || {};
 						tagContent = tagContent.replace( /(<\w+)/, '$1 class="mce_SELREST_start_target" ' )
 					}
 
+					// Update the selected text content with the marked tag above
 					markedText = [
 						tagContent,
 						markedText.substr( tagEndPosition )
 					].join( '' );
+				}
+
+				var bookMarkEnd = cursorMarkerSkeleton.clone()
+					.attr( 'id', 'mce_SELREST_end' )[ 0 ].outerHTML;
+
+				/**
+				 * A small workaround when selecting just a single HTML tag inside a shortcode.
+				 *
+				 * This removes the end selection marker, to make sure the HTML tag is the only selected
+				 * thing. This prevents the selection to appear like it contains multiple items in it (i.e.
+				 * all highlighted blue)
+				 */
+				if (
+					isCursorStartInTag
+					&& isCursorStartInTag.shortcodeTagInfo
+					&& isCursorEndInTag
+					&& isCursorStartInTag.ltPos === isCursorEndInTag.ltPos
+				) {
+					bookMarkEnd = '';
 				}
 
 				selectedText = [
@@ -487,9 +518,29 @@ window.wp = window.wp || {};
 
 			boundaryRange.collapse( false );
 			boundaryRange.insertNode( endElement[0] );
-			boundaryRange.setStart( startNode, startOffset );
-			boundaryRange.collapse( true );
-			boundaryRange.insertNode( startElement[0] );
+
+			/**
+			 * Sometimes the selection starts at the `<img>` tag, which makes the
+			 * boundary range `insertNode` insert `startElement` inside the `<img>` tag itself, i.e.:
+			 *
+			 * `<img><span class="mce_SELRES_start"...>...</span></img>`
+			 *
+			 * As this is an invalid syntax, it breaks the selection.
+			 *
+			 * The conditional below checks if `startNode` is a tag that suffer from that and
+			 * manually inserts the selection start maker before it.
+			 *
+			 * In the future this will probably include a list of tags, not just `<img>`, depending on the needs.
+			 */
+			if ( startNode && startNode.tagName && startNode.tagName.toLowerCase() === 'img' ) {
+				editor.$( startNode ).before( startElement[ 0 ] );
+			}
+			else {
+				boundaryRange.setStart( startNode, startOffset );
+				boundaryRange.collapse( true );
+				boundaryRange.insertNode( startElement[ 0 ] );
+			}
+
 
 			range.setStartAfter( startElement[0] );
 			range.setEndBefore( endElement[0] );
