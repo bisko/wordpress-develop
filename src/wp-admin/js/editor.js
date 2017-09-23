@@ -427,17 +427,36 @@ window.wp = window.wp || {};
 			/**
 			 * TODO:
 			 *  * Decide if we should animate the transition or not ( motion sickness/accessibility )
-			 *  * Decide how much to actually scroll. Sometimes the content above the editor appears when the scroll
-			 *  happens. Probably will be best to scroll to the top of the editor at max, not more.
 			 */
 			var elementTop = editor.$( element ).offset().top;
+			var TinyMCEContentAreaTop = editor.$( editor.getContentAreaContainer() ).offset().top;
+
+			var edTools = $('#wp-content-editor-tools');
+			var edToolsHeight = edTools.height();
+			var edToolsOffsetTop = edTools.offset().top;
+
+			var toolbarHeight = getToolbarHeight( editor );
 
 			var windowHeight = window.innerHeight
 				|| document.documentElement.clientHeight
 				|| document.body.clientHeight;
 
+			var selectionPosition = TinyMCEContentAreaTop + elementTop;
+			var visibleAreaHeight = windowHeight - ( edToolsHeight + toolbarHeight );
+
+			/**
+			 * The minimum scroll height should be to the top of the editor, to offer a consistent
+			 * experience.
+			 *
+			 * In order to find the top of the editor, we calculate the offset of `#wp-content-editor-tools` and
+			 * subtracting the height. This gives the scroll position where the top of the editor tools aligns with
+			 * the top of the viewport (under the Master Bar)
+			 */
+			var adjustedScroll = Math.max(selectionPosition - visibleAreaHeight / 2, edToolsOffsetTop - edToolsHeight);
+
+
 			$( 'body' ).animate( {
-				scrollTop: parseInt( elementTop - windowHeight / 8, 10 )
+				scrollTop: parseInt( adjustedScroll, 10 )
 			}, 100 );
 		}
 
