@@ -303,43 +303,6 @@ window.wp = window.wp || {};
 		}
 
 		/**
-		 * @summary Selects text in the TinyMCE `textarea`.
-		 *
-		 * Selects the text in TinyMCE's textarea that's between `selection.start` and `selection.end`.
-		 *
-		 * For `selection` parameter:
-		 * @see findBookmarkedPosition
-		 *
-		 * @param {Object} editor TinyMCE's editor instance.
-		 * @param {Object} selection Selection data.
-		 */
-		function selectTextInTextArea( editor, selection ) {
-			// only valid in the text area mode and if we have selection
-			if ( ! selection ) {
-				return;
-			}
-
-			var textArea = editor.getElement(),
-				start = selection.start,
-				end = selection.end || selection.start;
-
-			if ( textArea.focus ) {
-				// focus and scroll to the position
-				setTimeout( function() {
-					if ( textArea.blur ) {
-						// defocus before focusing
-						textArea.blur();
-					}
-					textArea.focus();
-				}, 100 );
-
-				textArea.focus();
-			}
-
-			textArea.setSelectionRange( start, end );
-		}
-
-		/**
 		 * @summary Adds text selection markers in the editor textarea.
 		 *
 		 * Adds selection markers in the content of the editor `textarea`.
@@ -716,6 +679,43 @@ window.wp = window.wp || {};
 					? endMatch.index - startMatch[ 0 ].length
 					: null
 			};
+		}
+
+		/**
+		 * @summary Selects text in the TinyMCE `textarea`.
+		 *
+		 * Selects the text in TinyMCE's textarea that's between `selection.start` and `selection.end`.
+		 *
+		 * For `selection` parameter:
+		 * @see findBookmarkedPosition
+		 *
+		 * @param {Object} editor TinyMCE's editor instance.
+		 * @param {Object} selection Selection data.
+		 */
+		function selectTextInTextArea( editor, selection ) {
+			// only valid in the text area mode and if we have selection
+			if ( ! selection ) {
+				return;
+			}
+
+			var textArea = editor.getElement(),
+				start = selection.start,
+				end = selection.end || selection.start;
+
+			if ( textArea.focus ) {
+				// focus and scroll to the position
+				setTimeout( function() {
+					if ( textArea.blur ) {
+						// defocus before focusing
+						textArea.blur();
+					}
+					textArea.focus();
+				}, 100 );
+
+				textArea.focus();
+			}
+
+			textArea.setSelectionRange( start, end );
 		}
 
 		/**
