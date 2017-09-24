@@ -196,13 +196,28 @@ window.wp = window.wp || {};
 		 * SELECTION KEEPING START
 		 */
 
+		/**
+		 * @summary Checks if a cursor is inside an HTML tag
+		 *
+		 * In order to prevent breaking HTML tags when selecting text, the cursor
+		 * must be moved to either the start or end of the tag.
+		 *
+		 * This will prevent the selection marker to be inserted in the middle of an HTML tag.
+		 *
+		 * This function gives information whether the cursor is inside a tag or not, as well as
+		 * the tag type, if it is a closing tag and check if the HTML tag is inside a shortcode tag,
+		 * e.g. `[caption]<img.../>..`
+		 *
+		 * @param {string} content The test content where the cursor is
+		 * @param {number} cursorPosition The cursor position inside the content
+		 *
+		 * @returns {(null|Object)} Null if cursor is not in a tag, Object if the cursor is inside a tag.
+		 */
 		function getContainingTagInfo( content, cursorPosition ) {
 			var lastLtPos = content.lastIndexOf( '<', cursorPosition ),
 				lastGtPos = content.lastIndexOf( '>', cursorPosition );
 
-			if ( lastLtPos > lastGtPos ) {
-				// inside a tag that was opened, but not closed
-
+			if ( lastLtPos > lastGtPos || content.substr( cursorPosition, 1 ) === '>' ) {
 				// find what the tag is
 				var tagContent = content.substr( lastLtPos );
 				var tagMatch = tagContent.match( /<\s*(\/)?(\w+)/ );
@@ -294,16 +309,33 @@ window.wp = window.wp || {};
 			textNode.setSelectionRange( start, end );
 		}
 
+		/**
+		 * @summary Adds text selection markers in the editor textarea.
+		 *
+		 *
+		 *
+		 * @param {object} $textarea TinyMCE's textarea wrapped as a DomQuery object
+		 * @param {object} jQuery A jQuery instance
+		 */
 		function addHTMLBookmarkInTextAreaContent( $textarea, jQuery ) {
 			var textArea = $textarea[ 0 ], // TODO add error checking
 				htmlModeCursorStartPosition = textArea.selectionStart,
 				htmlModeCursorEndPosition = textArea.selectionEnd;
 
+			var voidElements = [
+				'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+				'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr'
+			];
 
 			// check if the cursor is in a tag and if so, adjust it
 			var isCursorStartInTag = getContainingTagInfo( textArea.value, htmlModeCursorStartPosition );
 			if ( isCursorStartInTag ) {
-				htmlModeCursorStartPosition = isCursorStartInTag.ltPos;
+				if ( voidElements.indexOf( isCursorStartInTag.tagType ) !== - 1 ) {
+					htmlModeCursorStartPosition = isCursorStartInTag.ltPos;
+				}
+				else {
+					htmlModeCursorStartPosition = isCursorStartInTag.gtPos;
+				}
 			}
 
 			var isCursorEndInTag = getContainingTagInfo( textArea.value, htmlModeCursorEndPosition );
