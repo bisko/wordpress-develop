@@ -197,7 +197,7 @@ window.wp = window.wp || {};
 		 */
 
 		/**
-		 * @summary Checks if a cursor is inside an HTML tag
+		 * @summary Checks if a cursor is inside an HTML tag.
 		 *
 		 * In order to prevent breaking HTML tags when selecting text, the cursor
 		 * must be moved to either the start or end of the tag.
@@ -206,10 +206,10 @@ window.wp = window.wp || {};
 		 *
 		 * This function gives information whether the cursor is inside a tag or not, as well as
 		 * the tag type, if it is a closing tag and check if the HTML tag is inside a shortcode tag,
-		 * e.g. `[caption]<img.../>..`
+		 * e.g. `[caption]<img.../>..`.
 		 *
-		 * @param {string} content The test content where the cursor is
-		 * @param {number} cursorPosition The cursor position inside the content
+		 * @param {string} content The test content where the cursor is.
+		 * @param {number} cursorPosition The cursor position inside the content.
 		 *
 		 * @returns {(null|Object)} Null if cursor is not in a tag, Object if the cursor is inside a tag.
 		 */
@@ -242,6 +242,8 @@ window.wp = window.wp || {};
 		}
 
 		/**
+		 * @summary Check if a given HTML tag is enclosed in a shortcode tag
+		 *
 		 * If the cursor is inside a shortcode wrapping tag, e.g. `[caption]` it's better to
 		 * move the selection marker to before the short tag.
 		 *
@@ -252,6 +254,13 @@ window.wp = window.wp || {};
 		 *
 		 * 	Moving the selection to before the short code is better, since it allows to select
 		 * 	something, instead of just losing focus and going to the start of the content.
+		 *
+		 * 	@param {string} content The text content to check against
+		 * 	@param {number} cursorPosition 	The cursor position to check from. Usually this is the opening symbol of
+		 * 									an HTML tag.
+		 *
+		 * @return {(null|Object)} 	Null if the oject is not wrapped in a shortcode tag.
+		 * 							Information about the wrapping shortcode tag if it's wrapped in one.
 		 */
 		function getShortcodeWrapperInfo( content, cursorPosition ) {
 			if ( content.substr( cursorPosition - 1, 1 ) === ']' ) {
@@ -273,46 +282,69 @@ window.wp = window.wp || {};
 			return null;
 		}
 
+		/**
+		 * Generate a cursor marker element to be inserted in the content.
+		 *
+		 * `span` seems to be the least destructive element that can be used.
+		 *
+		 * Using DomQuery syntax to create it, since it's used as both text and as a DOM element.
+		 *
+		 * @param {Object} editor The TinyMCE editor instance.
+		 * @param {string} content The content to insert into the cusror marker element.
+		 */
 		function getCursorMarkerSpan( editor, content ) {
 			return editor.$( '<span>' ).css( {
-				display: 'inline-block',
-				width: 0,
-				overflow: 'hidden',
-				'line-height': 0
-			} )
-				.html( content ? content : '' );
+						display: 'inline-block',
+						width: 0,
+						overflow: 'hidden',
+						'line-height': 0
+					} )
+					.html( content ? content : '' );
 		}
 
+		/**
+		 * @summary Selects text in the TinyMCE `textarea`.
+		 *
+		 * Selects the text in TinyMCE's textarea that's between `selection.start` and `selection.end`.
+		 *
+		 * For `selection` parameter:
+		 * @see findBookmarkedPosition
+		 *
+		 * @param {Object} editor TinyMCE's editor instance.
+		 * @param {Object} selection Selection data.
+		 */
 		function selectTextInTextArea( editor, selection ) {
 			// only valid in the text area mode and if we have selection
 			if ( ! selection ) {
 				return;
 			}
 
-			var textNode = editor.getElement(),
+			var textArea = editor.getElement(),
 				start = selection.start,
 				end = selection.end || selection.start;
 
-			if ( textNode.focus ) {
+			if ( textArea.focus ) {
 				// focus and scroll to the position
 				setTimeout( function() {
-					if ( textNode.blur ) {
+					if ( textArea.blur ) {
 						// defocus before focusing
-						textNode.blur();
+						textArea.blur();
 					}
-					textNode.focus(); // TODO check browser compatibility
+					textArea.focus();
 				}, 100 );
 
-				textNode.focus(); // TODO check browser compatibility
+				textArea.focus();
 			}
 
-			textNode.setSelectionRange( start, end );
+			textArea.setSelectionRange( start, end );
 		}
 
 		/**
 		 * @summary Adds text selection markers in the editor textarea.
 		 *
-		 *
+		 * Adds selection markers in the content of the editor `textarea`.
+		 * The method directly manipulates the `textarea` content, to allow TinyMCE plugins
+		 * to run after the markers are added.
 		 *
 		 * @param {object} $textarea TinyMCE's textarea wrapped as a DomQuery object
 		 * @param {object} jQuery A jQuery instance
@@ -330,6 +362,19 @@ window.wp = window.wp || {};
 			// check if the cursor is in a tag and if so, adjust it
 			var isCursorStartInTag = getContainingTagInfo( textArea.value, htmlModeCursorStartPosition );
 			if ( isCursorStartInTag ) {
+				/**
+				 * Only move to the start of the HTML tag (to select the whole element) if the tag
+				 * is part of the voidElements list above.
+				 *
+				 * This list includes tags that are self-contained and don't need a closing tag, according to the
+				 * HTML5 specification.
+				 *
+				 * This is done in order to make selection of text a bit more consistent when selecting text in
+				 * `<p>` tags or such.
+				 *
+				 * In cases where the tag is not a void element, the cursor is put to the end of the tag,
+				 * so it's either between the opening and closing tag elements or after the closing tag.
+				 */
 				if ( voidElements.indexOf( isCursorStartInTag.tagType ) !== - 1 ) {
 					htmlModeCursorStartPosition = isCursorStartInTag.ltPos;
 				}
@@ -421,6 +466,16 @@ window.wp = window.wp || {};
 			].join( '' );
 		}
 
+		/**
+		 * @summary Focus the selection markers in Visual mode.
+		 *
+		 * The method checks for existing selection markers inside the editor DOM (Visual mode)
+		 * and create a selection between the two nodes using the DOM `createRange` selection API
+		 *
+		 * If there is only a single node, select only the single node through TinyMCE's selection API
+		 *
+		 * @param {Object} editor TinyMCE editor instance.
+		 */
 		function focusHTMLBookmarkInVisualEditor( editor ) {
 			var startNode = editor.$( '#mce_SELREST_start' ),
 				endNode = editor.$( '#mce_SELREST_end' );
@@ -455,6 +510,19 @@ window.wp = window.wp || {};
 			endNode.remove();
 		}
 
+		/**
+		 * @summary Scrolls the content to place the selected element in the center of the screen.
+		 *
+		 * Takes an element, that is usually the selection start element, selected in
+		 * `focusHTMLBookmarkInVisualEditor()` and scrolls the screen so the element appears roughly
+		 * in the middle of the screen.
+		 *
+		 * I order to achieve the proper positioning, the editor media bar and toolbar are subtracted
+		 * from the window height, to get the proper viewport window, that the user sees.
+		 *
+		 * @param {Object} editor TinyMCE editor instance.
+		 * @param {Object} element HTMLElement that should be scrolled into view.
+		 */
 		function scrollVisualModeToStartElement( editor, element ) {
 			/**
 			 * TODO:
@@ -492,18 +560,32 @@ window.wp = window.wp || {};
 			}, 100 );
 		}
 
+		/**
+		 * This method was extracted from the `SaveContent` hook in
+		 * `wp-includes/js/tinymce/plugins/wordpress/plugin.js`.
+		 *
+		 * It's needed here, since the method changes the content a bit, which confuses the cursor position.
+		 *
+		 * @param {Object} event TinyMCE event object.
+		 */
 		function fixTextAreaContent( event ) {
 			// Keep empty paragraphs :(
 			event.content = event.content.replace( /<p>(?:<br ?\/?>|\u00a0|\uFEFF| )*<\/p>/g, '<p>&nbsp;</p>' );
 		}
 
 		/**
-		 * Finds the current selection position in the Visual editor.
+		 * @summary Finds the current selection position in the Visual editor.
 		 *
-		 * It uses some black magic raw JS trickery. Not for the faint-hearted.
+		 * Find the current selection in the Visual editor by inserting marker elements at the start
+		 * and end of the selection.
+		 *
+		 * Uses the standard DOM selection API to achieve that goal.
+		 *
+		 * Check the notes in the comments in the code below for more information on some gotchas
+		 * and why this solution was chosen.
 		 *
 		 * @param {Object} editor The editor where we must find the selection
-		 * @returns {null | Object} The selection range position in the editor
+		 * @returns {(null|Object)} The selection range position in the editor
 		 */
 		function findBookmarkedPosition( editor ) {
 			// Get the TinyMCE `window` reference, since we need to access the raw selection.
@@ -534,9 +616,8 @@ window.wp = window.wp || {};
 			var endElement = spanSkeleton.clone().addClass('mce_SELRES_end');
 
 			/**
-			 * Black magic start.
-			 *
-			 * Inspired by https://stackoverflow.com/a/17497803/153310
+			 * Inspired by:
+			 * @link https://stackoverflow.com/a/17497803/153310
 			 *
 			 * Why do it this way and not with TinyMCE's bookmarks?
 			 *
