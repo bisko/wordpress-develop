@@ -453,10 +453,10 @@ window.wp = window.wp || {};
 				if ( ! endNode.length ) {
 					editor.selection.select( startNode[ 0 ] );
 				} else {
-					const selection = document.createRange();
+					const selection = editor.getDoc().createRange();
 
-					selection.setStart( startNode[ 0 ], 0 );
-					selection.setEnd( endNode[ 0 ], 0 );
+					selection.setStartAfter( startNode[ 0 ] );
+					selection.setEndBefore( endNode[ 0 ] );
 
 					editor.selection.setRng( selection );
 				}
