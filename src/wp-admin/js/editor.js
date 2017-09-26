@@ -382,10 +382,10 @@ window.wp = window.wp || {};
 					 * @see focusHTMLBookmarkInVisualEditor
 					 */
 					if ( tagContent.match( classMatch ) ) {
-						tagContent = tagContent.replace( classMatch, 'class=$1$2 mce_SELREST_start_target$1' )
+						tagContent = tagContent.replace( classMatch, 'class=$1$2 mce_SELRES_start_target$1' )
 					}
 					else {
-						tagContent = tagContent.replace( /(<\w+)/, '$1 class="mce_SELREST_start_target" ' )
+						tagContent = tagContent.replace( /(<\w+)/, '$1 class="mce_SELRES_start_target" ' )
 					}
 
 					// Update the selected text content with the marked tag above
@@ -396,7 +396,7 @@ window.wp = window.wp || {};
 				}
 
 				var bookMarkEnd = cursorMarkerSkeleton.clone()
-					.attr( 'id', 'mce_SELREST_end' )[ 0 ].outerHTML;
+					.attr( 'id', 'mce_SELRES_end' )[ 0 ].outerHTML;
 
 				/**
 				 * A small workaround when selecting just a single HTML tag inside a shortcode.
@@ -423,7 +423,7 @@ window.wp = window.wp || {};
 			textArea.value = [
 				textArea.value.slice( 0, htmlModeCursorStartPosition ), // text until the cursor/selection position
 				cursorMarkerSkeleton.clone()							// cursor/selection start marker
-					.attr('id', 'mce_SELREST_start')[0].outerHTML,
+					.attr('id', 'mce_SELRES_start')[0].outerHTML,
 				selectedText, 											// selected text with end cursor/position marker
 				textArea.value.slice( htmlModeCursorEndPosition )		// text from last cursor/selection position to end
 			].join( '' );
@@ -440,11 +440,11 @@ window.wp = window.wp || {};
 		 * @param {Object} editor TinyMCE editor instance.
 		 */
 		function focusHTMLBookmarkInVisualEditor( editor ) {
-			var startNode = editor.$( '#mce_SELREST_start' ),
-				endNode = editor.$( '#mce_SELREST_end' );
+			var startNode = editor.$( '#mce_SELRES_start' ),
+				endNode = editor.$( '#mce_SELRES_end' );
 
 			if ( ! startNode.length ) {
-				startNode = editor.$( '.mce_SELREST_start_target' );
+				startNode = editor.$( '.mce_SELRES_start_target' );
 			}
 
 			if ( startNode.length ) {
@@ -464,8 +464,8 @@ window.wp = window.wp || {};
 				scrollVisualModeToStartElement( editor, startNode );
 			}
 
-			if ( startNode.hasClass( 'mce_SELREST_start_target' ) ) {
-				startNode.removeClass( 'mce_SELREST_start_target' );
+			if ( startNode.hasClass( 'mce_SELRES_start_target' ) ) {
+				startNode.removeClass( 'mce_SELRES_start_target' );
 			}
 			else {
 				startNode.remove();
