@@ -193,10 +193,6 @@ window.wp = window.wp || {};
 		}
 
 		/**
-		 * SELECTION KEEPING START
-		 */
-
-		/**
 		 * @summary Checks if a cursor is inside an HTML tag.
 		 *
 		 * In order to prevent breaking HTML tags when selecting text, the cursor
@@ -565,7 +561,7 @@ window.wp = window.wp || {};
 			 * format specified below.
 			 * @type {string}
 			 */
-			var selectionID = 'SELRES_' + Math.random(); // TODO add UUID if low overhead
+			var selectionID = 'SELRES_' + Math.random();
 
 			/**
 			 * Create two marker elements that will be used to mark the start and the end of the range.
@@ -717,10 +713,6 @@ window.wp = window.wp || {};
 
 			textArea.setSelectionRange( start, end );
 		}
-
-		/**
-		 * SELECTION KEEPING END
-		 */
 
 		/**
 		 * @summary Replaces <p> tags with two line breaks. "Opposite" of wpautop().
