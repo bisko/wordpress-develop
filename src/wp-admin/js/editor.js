@@ -309,7 +309,12 @@ window.wp = window.wp || {};
 		 * @param {object} jQuery A jQuery instance
 		 */
 		function addHTMLBookmarkInTextAreaContent( $textarea, jQuery ) {
-			var textArea = $textarea[ 0 ], // TODO add error checking
+			if ( ! $textarea || ! $textarea.length ) {
+				// If no valid $textarea object is provided, there's nothing we can do.
+				return;
+			}
+
+			var textArea = $textarea[ 0 ],
 				htmlModeCursorStartPosition = textArea.selectionStart,
 				htmlModeCursorEndPosition = textArea.selectionEnd;
 
