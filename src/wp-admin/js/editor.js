@@ -396,7 +396,7 @@ window.wp = window.wp || {};
 				}
 
 				var bookMarkEnd = cursorMarkerSkeleton.clone()
-					.attr( 'id', 'mce_SELRES_end' )[ 0 ].outerHTML;
+					.addClass( 'mce_SELRES_end' )[ 0 ].outerHTML;
 
 				/**
 				 * A small workaround when selecting just a single HTML tag inside a shortcode.
@@ -423,7 +423,7 @@ window.wp = window.wp || {};
 			textArea.value = [
 				textArea.value.slice( 0, htmlModeCursorStartPosition ), // text until the cursor/selection position
 				cursorMarkerSkeleton.clone()							// cursor/selection start marker
-					.attr('id', 'mce_SELRES_start')[0].outerHTML,
+					.addClass( 'mce_SELRES_start')[0].outerHTML,
 				selectedText, 											// selected text with end cursor/position marker
 				textArea.value.slice( htmlModeCursorEndPosition )		// text from last cursor/selection position to end
 			].join( '' );
@@ -440,8 +440,8 @@ window.wp = window.wp || {};
 		 * @param {Object} editor TinyMCE editor instance.
 		 */
 		function focusHTMLBookmarkInVisualEditor( editor ) {
-			var startNode = editor.$( '#mce_SELRES_start' ),
-				endNode = editor.$( '#mce_SELRES_end' );
+			var startNode = editor.$( '.mce_SELRES_start' ),
+				endNode = editor.$( '.mce_SELRES_end' );
 
 			if ( ! startNode.length ) {
 				startNode = editor.$( '.mce_SELRES_start_target' );
