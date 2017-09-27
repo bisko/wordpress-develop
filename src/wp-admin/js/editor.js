@@ -398,7 +398,7 @@ window.wp = window.wp || {};
 		 * @param {string} content Textarea content that the cursors are in
 		 * @param {{cursorStart: number, cursorEnd: number}} cursorPositions Cursor start and end positions
 		 *
-		 * @return {{cursorStart: number, cursorEnd: number, inPreviewableShortcode: boolean}}
+		 * @return {{cursorStart: number, cursorEnd: number}}
 		 */
 		function adjustTextAreaSelectionCursors( content, cursorPositions ) {
 			var voidElements = [
@@ -450,7 +450,7 @@ window.wp = window.wp || {};
 
 			return {
 				cursorStart: cursorStart,
-				cursorEnd: cursorEnd,
+				cursorEnd: cursorEnd
 			}
 		}
 
