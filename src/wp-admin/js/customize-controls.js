@@ -1,4 +1,4 @@
-/* global _wpCustomizeHeader, _wpCustomizeBackground, _wpMediaViewsL10n, MediaElementPlayer, console */
+/* global _wpCustomizeHeader, _wpCustomizeBackground, _wpMediaViewsL10n, MediaElementPlayer, console, confirm */
 (function( exports, $ ){
 	var Container, focus, normalizedTransitionendEventName, api = wp.customize;
 
@@ -355,13 +355,25 @@
 	 * @since 4.7.0
 	 * @access public
 	 *
-	 * @param {object} [changes] Mapping of setting IDs to setting params each normally including a value property, or mapping to null.
-	 *                           If not provided, then the changes will still be obtained from unsaved dirty settings.
+	 * @param {object}  [changes] - Mapping of setting IDs to setting params each normally including a value property, or mapping to null.
+	 *                             If not provided, then the changes will still be obtained from unsaved dirty settings.
+	 * @param {object}  [args] - Additional options for the save request.
+	 * @param {boolean} [args.autosave=false] - Whether changes will be stored in autosave revision if the changeset has been promoted from an auto-draft.
+	 * @param {boolean} [args.force=false] - Send request to update even when there are no changes to submit. This can be used to request the latest status of the changeset on the server.
+	 * @param {string}  [args.title] - Title to update in the changeset. Optional.
+	 * @param {string}  [args.date] - Date to update in the changeset. Optional.
 	 * @returns {jQuery.Promise} Promise resolving with the response data.
 	 */
-	api.requestChangesetUpdate = function requestChangesetUpdate( changes ) {
-		var deferred, request, submittedChanges = {}, data;
+	api.requestChangesetUpdate = function requestChangesetUpdate( changes, args ) {
+		var deferred, request, submittedChanges = {}, data, submittedArgs;
 		deferred = new $.Deferred();
+
+		submittedArgs = _.extend( {
+			title: null,
+			date: null,
+			autosave: false,
+			force: false
+		}, args );
 
 		if ( changes ) {
 			_.extend( submittedChanges, changes );
@@ -378,10 +390,23 @@
 			}
 		} );
 
+		// Allow plugins to attach additional params to the settings.
+		api.trigger( 'changeset-save', submittedChanges, submittedArgs );
+
 		// Short-circuit when there are no pending changes.
-		if ( _.isEmpty( submittedChanges ) ) {
+		if ( ! submittedArgs.force && _.isEmpty( submittedChanges ) && null === submittedArgs.title && null === submittedArgs.date ) {
 			deferred.resolve( {} );
 			return deferred.promise();
+		}
+
+		// A status would cause a revision to be made, and for this wp.customize.previewer.save() should be used. Status is also disallowed for revisions regardless.
+		if ( submittedArgs.status ) {
+			return deferred.reject( { code: 'illegal_status_in_changeset_update' } ).promise();
+		}
+
+		// Dates not beung allowed for revisions are is a technical limitation of post revisions.
+		if ( submittedArgs.date && submittedArgs.autosave ) {
+			return deferred.reject( { code: 'illegal_autosave_with_date_gmt' } ).promise();
 		}
 
 		// Make sure that publishing a changeset waits for all changeset update requests to complete.
@@ -389,9 +414,6 @@
 		deferred.always( function() {
 			api.state( 'processing' ).set( api.state( 'processing' ).get() - 1 );
 		} );
-
-		// Allow plugins to attach additional params to the settings.
-		api.trigger( 'changeset-save', submittedChanges );
 
 		// Ensure that if any plugins add data to save requests by extending query() that they get included here.
 		data = api.previewer.query( { excludeCustomizedSaved: true } );
@@ -401,6 +423,15 @@
 			customize_theme: api.settings.theme.stylesheet,
 			customize_changeset_data: JSON.stringify( submittedChanges )
 		} );
+		if ( null !== submittedArgs.title ) {
+			data.customize_changeset_title = submittedArgs.title;
+		}
+		if ( null !== submittedArgs.date ) {
+			data.customize_changeset_date = submittedArgs.date;
+		}
+		if ( false !== submittedArgs.autosave ) {
+			data.customize_changeset_autosave = 'true';
+		}
 
 		request = wp.ajax.post( 'customize_save', data );
 
@@ -411,6 +442,11 @@
 			api._lastSavedRevision = Math.max( api._latestRevision, api._lastSavedRevision );
 
 			api.state( 'changesetStatus' ).set( data.changeset_status );
+
+			if ( data.changeset_date ) {
+				api.state( 'changesetDate' ).set( data.changeset_date );
+			}
+
 			deferred.resolve( data );
 			api.trigger( 'changeset-saved', data );
 
@@ -553,6 +589,48 @@
 			), false ) // check for presence of false in map's return value
 		);
 		return equal;
+	};
+
+	/**
+	 * Get current timestamp adjusted for server clock time.
+	 *
+	 * Same functionality as the `current_time( 'mysql', false )` function in PHP.
+	 *
+	 * @since 4.9.0
+	 *
+	 * @returns {int} Current timestamp.
+	 */
+	api.utils.getCurrentTimestamp = function getCurrentTimestamp() {
+		var currentDate, currentClientTimestamp, timestampDifferential;
+		currentClientTimestamp = _.now();
+		currentDate = new Date( api.settings.initialServerDate.replace( /-/g, '/' ) );
+		timestampDifferential = currentClientTimestamp - api.settings.initialClientTimestamp;
+		timestampDifferential += api.settings.initialClientTimestamp - api.settings.initialServerTimestamp;
+		currentDate.setTime( currentDate.getTime() + timestampDifferential );
+		return currentDate.getTime();
+	};
+
+	/**
+	 * Get remaining time of when the date is set.
+	 *
+	 * @since 4.9.0
+	 *
+	 * @param {string|int|Date} datetime - Date time or timestamp of the future date.
+	 * @return {int} remainingTime - Remaining time in milliseconds.
+	 */
+	api.utils.getRemainingTime = function getRemainingTime( datetime ) {
+		var millisecondsDivider = 1000, remainingTime, timestamp;
+		if ( datetime instanceof Date ) {
+			timestamp = datetime.getTime();
+		} else if ( 'string' === typeof datetime ) {
+			timestamp = ( new Date( datetime.replace( /-/g, '/' ) ) ).getTime();
+		} else {
+			timestamp = datetime;
+		}
+
+		remainingTime = timestamp - api.utils.getCurrentTimestamp();
+		remainingTime = Math.ceil( remainingTime / millisecondsDivider );
+		return remainingTime;
 	};
 
 	/**
@@ -1051,6 +1129,8 @@
 	 */
 	api.Section = Container.extend({
 		containerType: 'section',
+		containerParent: '#customize-theme-controls',
+		containerPaneParent: '.customize-pane-parent',
 		defaults: {
 			title: '',
 			description: '',
@@ -1103,8 +1183,9 @@
 		 */
 		embed: function () {
 			var inject,
-				section = this,
-				container = $( '#customize-theme-controls' );
+				section = this;
+
+			section.containerParent = api.ensure( section.containerParent );
 
 			// Watch for changes to the panel state
 			inject = function ( panelId ) {
@@ -1119,19 +1200,19 @@
 								parentContainer.append( section.headContainer );
 							}
 							if ( ! section.contentContainer.parent().is( section.headContainer ) ) {
-								container.append( section.contentContainer );
+								section.containerParent.append( section.contentContainer );
 							}
 							section.deferred.embedded.resolve();
 						});
 					} );
 				} else {
 					// There is no panel, so embed the section in the root of the customizer
-					parentContainer = $( '.customize-pane-parent' ); // @todo This should be defined elsewhere, and to be configurable
+					parentContainer = api.ensure( section.containerPaneParent );
 					if ( ! section.headContainer.parent().is( parentContainer ) ) {
 						parentContainer.append( section.headContainer );
 					}
 					if ( ! section.contentContainer.parent().is( section.headContainer ) ) {
-						container.append( section.contentContainer );
+						section.containerParent.append( section.contentContainer );
 					}
 					section.deferred.embedded.resolve();
 				}
@@ -1176,7 +1257,7 @@
 				content = meta.find( '.customize-section-description:first' );
 				content.toggleClass( 'open' );
 				content.slideToggle();
-				content.attr( 'aria-expanded', function ( i, attr ) {
+				$( this ).attr( 'aria-expanded', function( i, attr ) {
 					return 'true' === attr ? 'false' : 'true';
 				});
 			});
@@ -1268,9 +1349,11 @@
 						completeCallback: expand
 					});
 				} else {
-					api.panel.each( function( panel ) {
-						panel.collapse();
-					});
+					if ( ! args.allowMultiple ) {
+						api.panel.each( function( panel ) {
+							panel.collapse();
+						});
+					}
 					expand();
 				}
 
@@ -1705,9 +1788,15 @@
 
 				api.state( 'processing' ).unbind( onceProcessingComplete );
 
-				request = api.requestChangesetUpdate();
+				request = api.requestChangesetUpdate( {}, { autosave: true } );
 				request.done( function() {
 					$( window ).off( 'beforeunload.customize-confirm' );
+
+					// Include autosaved param to load autosave revision without prompting user to restore it.
+					if ( ! api.state( 'saved' ).get() ) {
+						urlParser.search += '&customize_autosaved=on';
+					}
+
 					top.location.href = urlParser.href;
 					deferred.resolve();
 				} );
@@ -1805,6 +1894,125 @@
 	});
 
 	/**
+	 * Class wp.customize.OuterSection.
+	 *
+	 * Creates section outside of the sidebar, there is no ui to trigger collapse/expand so
+	 * it would require custom handling.
+	 *
+	 * @since 4.9
+	 *
+	 * @constructor
+	 * @augments wp.customize.Section
+	 * @augments wp.customize.Container
+	 */
+	api.OuterSection = api.Section.extend({
+
+		/**
+		 * Initialize.
+		 *
+		 * @since 4.9.0
+		 *
+		 * @returns {void}
+		 */
+		initialize: function() {
+			var section = this;
+			section.containerParent = '#customize-outer-theme-controls';
+			section.containerPaneParent = '.customize-outer-pane-parent';
+			return api.Section.prototype.initialize.apply( section, arguments );
+		},
+
+		/**
+		 * Overrides api.Section.prototype.onChangeExpanded to prevent collapse/expand effect
+		 * on other sections and panels.
+		 *
+		 * @since 4.9.0
+		 *
+		 * @param {Boolean}  expanded - The expanded state to transition to.
+		 * @param {Object}   [args] - Args.
+		 * @param {boolean}  [args.unchanged] - Whether the state is already known to not be changed, and so short-circuit with calling completeCallback early.
+		 * @param {Function} [args.completeCallback] - Function to call when the slideUp/slideDown has completed.
+		 * @param {Object}   [args.duration] - The duration for the animation.
+		 */
+		onChangeExpanded: function( expanded, args ) {
+			var section = this,
+				container = section.headContainer.closest( '.wp-full-overlay-sidebar-content' ),
+				content = section.contentContainer,
+				backBtn = content.find( '.customize-section-back' ),
+				sectionTitle = section.headContainer.find( '.accordion-section-title' ).first(),
+				body = $( 'body' ),
+				expand, panel;
+
+			body.toggleClass( 'outer-section-open', expanded );
+			section.container.toggleClass( 'open', expanded );
+			section.container.removeClass( 'busy' );
+			api.section.each( function( _section ) {
+				if ( 'outer' === _section.params.type && _section.id !== section.id ) {
+					_section.container.removeClass( 'open' );
+				}
+			} );
+
+			if ( expanded && ! content.hasClass( 'open' ) ) {
+
+				if ( args.unchanged ) {
+					expand = args.completeCallback;
+				} else {
+					expand = $.proxy( function() {
+						section._animateChangeExpanded( function() {
+							sectionTitle.attr( 'tabindex', '-1' );
+							backBtn.attr( 'tabindex', '0' );
+
+							backBtn.focus();
+							content.css( 'top', '' );
+							container.scrollTop( 0 );
+
+							if ( args.completeCallback ) {
+								args.completeCallback();
+							}
+						} );
+
+						content.addClass( 'open' );
+					}, this );
+				}
+
+				if ( section.panel() ) {
+					api.panel( section.panel() ).expand({
+						duration: args.duration,
+						completeCallback: expand
+					});
+				} else {
+					expand();
+				}
+
+			} else if ( ! expanded && content.hasClass( 'open' ) ) {
+				if ( section.panel() ) {
+					panel = api.panel( section.panel() );
+					if ( panel.contentContainer.hasClass( 'skip-transition' ) ) {
+						panel.collapse();
+					}
+				}
+				section._animateChangeExpanded( function() {
+					backBtn.attr( 'tabindex', '-1' );
+					sectionTitle.attr( 'tabindex', '0' );
+
+					sectionTitle.focus();
+					content.css( 'top', '' );
+
+					if ( args.completeCallback ) {
+						args.completeCallback();
+					}
+				} );
+
+				content.removeClass( 'open' );
+
+			} else {
+				if ( args.completeCallback ) {
+					args.completeCallback();
+				}
+			}
+		}
+	});
+
+	/**
 	 * @since 4.1.0
 	 *
 	 * @class
@@ -1888,12 +2096,7 @@
 
 			meta = panel.container.find( '.panel-meta:first' );
 
-			meta.find( '> .accordion-section-title .customize-help-toggle' ).on( 'click keydown', function( event ) {
-				if ( api.utils.isKeydownButNotEnterEvent( event ) ) {
-					return;
-				}
-				event.preventDefault(); // Keep this AFTER the key filter above
-
+			meta.find( '> .accordion-section-title .customize-help-toggle' ).on( 'click', function() {
 				if ( meta.hasClass( 'cannot-expand' ) ) {
 					return;
 				}
@@ -3781,6 +3984,20 @@
 
 			control.editor = wp.codeEditor.initialize( $textarea, settings );
 
+			// Improve the editor accessibility.
+			$( control.editor.codemirror.display.lineDiv )
+				.attr({
+					role: 'textbox',
+					'aria-multiline': 'true',
+					'aria-label': control.params.label,
+					'aria-describedby': 'editor-keyboard-trap-help-1 editor-keyboard-trap-help-2 editor-keyboard-trap-help-3 editor-keyboard-trap-help-4'
+				});
+
+			// Focus the editor when clicking on its label.
+			control.container.find( 'label' ).on( 'click', function() {
+				control.editor.codemirror.focus();
+			});
+
 			/*
 			 * When the CodeMirror instance changes, mirror to the textarea,
 			 * where we have our "true" change event handler bound.
@@ -3916,6 +4133,450 @@
 		}
 	});
 
+	/**
+	 * Class wp.customize.DateTimeControl.
+	 *
+	 * @since 4.9.0
+	 * @constructor
+	 * @augments wp.customize.Control
+	 * @augments wp.customize.Class
+	 */
+	api.DateTimeControl = api.Control.extend({
+
+		dateInputs: {},
+		inputElements: {},
+		invalidDate: false,
+
+		/**
+		 * Initialize behaviors.
+		 *
+		 * @since 4.9.0
+		 * @returns {void}
+		 */
+		ready: function ready() {
+			var control = this;
+
+			_.bindAll( control, 'populateSetting', 'updateDaysForMonth', 'updateMinutesForHour' );
+
+			control.dateInputs = control.container.find( '.date-input' );
+
+			// @todo This needs https://core.trac.wordpress.org/ticket/37964
+			if ( ! control.setting ) {
+				control.setting = new api.Value();
+			}
+
+			if ( ! control.setting.get() && control.params.defaultValue ) {
+				control.setting.set( control.params.defaultValue );
+			}
+
+			control.dateInputs.each( function() {
+				var input = $( this ), component, element;
+				component = input.data( 'component' );
+				element = new api.Element( input );
+				element.validate = function( value ) {
+					return _.contains( [ 'am', 'pm' ], value ) ? value : parseInt( value, 10 );
+				};
+				control.inputElements[ component ] = element;
+				control.elements.push( element );
+			} );
+
+			control.dateInputs.on( 'input', control.populateSetting );
+			control.inputElements.month.bind( control.updateDaysForMonth );
+			control.inputElements.year.bind( control.updateDaysForMonth );
+			control.inputElements.hour.bind( control.updateMinutesForHour );
+			control.populateDateInputs();
+		},
+
+		/**
+		 * Parse datetime string.
+		 *
+		 * @since 4.9.0
+		 * @param {string} datetime Date/Time string. Accepts Y-m-d H:i:s format.
+		 * @param {boolean} twelveHourFormat If twelve hour format array is required.
+		 * @returns {object|null} Returns object containing date components or null if parse error.
+		 */
+		parseDateTime: function parseDateTime( datetime, twelveHourFormat ) {
+			var matches, date, midDayHour = 12;
+
+			if ( datetime ) {
+				matches = datetime.match( /^(\d\d\d\d)-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)$/ );
+			}
+
+			if ( ! matches ) {
+				return null;
+			}
+
+			matches.shift();
+
+			date = {
+				year: matches.shift(),
+				month: matches.shift(),
+				day: matches.shift(),
+				hour: matches.shift(),
+				minute: matches.shift(),
+				second: matches.shift()
+			};
+
+			if ( twelveHourFormat ) {
+				date.hour = parseInt( date.hour, 10 );
+				date.ampm = date.hour >= midDayHour ? 'pm' : 'am';
+				date.hour = date.hour % midDayHour ? String( date.hour % midDayHour ) : String( midDayHour );
+				delete date.second;
+			}
+
+			return date;
+		},
+
+		/**
+		 * Validates if input components have valid date and time.
+		 *
+		 * @since 4.9.0
+		 * @return {boolean} If date input fields has error.
+		 */
+		validateInputs: function validateInputs() {
+			var control = this, errorMessage;
+
+			control.invalidDate = false;
+
+			_.each( [ 'day', 'hour', 'year', 'minute' ], function( component ) {
+				var element, el, max, min, maxLength, value;
+
+				if ( ! control.invalidDate ) {
+					element = control.inputElements[ component ];
+					el = element.element.get( 0 );
+					max = parseInt( element.element.attr( 'max' ), 10 );
+					min = parseInt( element.element.attr( 'min' ), 10 );
+					maxLength = parseInt( element.element.attr( 'maxlength' ), 10 );
+					value = element();
+					control.invalidDate = value > max || value < min || String( value ).length > maxLength;
+					errorMessage = control.invalidDate ? api.l10n.invalid + ' ' + component : '';
+
+					el.setCustomValidity( errorMessage );
+					_.result( el, 'reportValidity' );
+				}
+			} );
+
+			return control.invalidDate;
+		},
+
+		/**
+		 * Updates number of days according to the month and year selected.
+		 *
+		 * @since 4.9.0
+		 * @return {void}
+		 */
+		updateDaysForMonth: function updateDaysForMonth() {
+			var control = this, daysInMonth, year, month, day;
+
+			month = control.inputElements.month();
+			year = control.inputElements.year();
+			day = control.inputElements.day();
+
+			if ( month && year ) {
+				daysInMonth = new Date( year, month, 0 ).getDate();
+				control.inputElements.day.element.attr( 'max', daysInMonth );
+
+				if ( day > daysInMonth ) {
+					control.inputElements.day( daysInMonth );
+				}
+			}
+		},
+
+		/**
+		 * Updates number of minutes according to the hour selected.
+		 *
+		 * @since 4.9.0
+		 * @return {void}
+		 */
+		updateMinutesForHour: function updateMinutesForHour() {
+			var control = this, maxHours = 24, minuteEl;
+
+			if ( control.inputElements.ampm ) {
+				return;
+			}
+
+			minuteEl = control.inputElements.minute.element;
+
+			if ( maxHours === control.inputElements.hour() ) {
+				control.inputElements.minute( 0 );
+				minuteEl.data( 'default-max', minuteEl.attr( 'max' ) );
+				minuteEl.data( 'default-maxlength', minuteEl.attr( 'maxlength' ) );
+				minuteEl.attr( 'max', '0' );
+			} else if ( minuteEl.data( 'default-max' ) ) {
+				minuteEl.attr( 'max', minuteEl.data( 'default-max' ) );
+				minuteEl.attr( 'maxlength', minuteEl.data( 'maxlength' ) );
+			}
+		},
+
+		/**
+		 * Populate setting value from the inputs.
+		 *
+		 * @since 4.9.0
+		 * @returns {boolean} If setting updated.
+		 */
+		populateSetting: function populateSetting() {
+			var control = this, date;
+
+			if ( control.validateInputs() || ! control.params.allowPastDate && ! control.isFutureDate() ) {
+				return false;
+			}
+
+			date = control.convertInputDateToString();
+			control.setting.set( date );
+			return true;
+		},
+
+		/**
+		 * Converts input values to string in Y-m-d H:i:s format.
+		 *
+		 * @since 4.9.0
+		 * @return {string} Date string.
+		 */
+		convertInputDateToString: function convertInputDateToString() {
+			var control = this, date = '', dateFormat, hourInTwentyFourHourFormat,
+				getElementValue, pad;
+
+			pad = function( number, padding ) {
+				var zeros;
+				if ( String( number ).length < padding ) {
+					zeros = padding - String( number ).length;
+					number = Math.pow( 10, zeros ).toString().substr( 1 ) + String( number );
+				}
+				return number;
+			};
+
+			getElementValue = function( component ) {
+				var value = control.inputElements[ component ].get();
+
+				if ( _.contains( [ 'month', 'day', 'hour', 'minute' ], component ) ) {
+					value = pad( value, 2 );
+				} else if ( 'year' === component ) {
+					value = pad( value, 4 );
+				}
+				return value;
+			};
+
+			hourInTwentyFourHourFormat = control.inputElements.ampm ? control.convertHourToTwentyFourHourFormat( control.inputElements.hour(), control.inputElements.ampm() ) : control.inputElements.hour();
+			dateFormat = [ 'year', '-', 'month', '-', 'day', ' ', pad( hourInTwentyFourHourFormat, 2 ), ':', 'minute', ':', '00' ];
+
+			_.each( dateFormat, function( component ) {
+				date += control.inputElements[ component ] ? getElementValue( component ) : component;
+			} );
+
+			return date;
+		},
+
+		/**
+		 * Check if the date is in the future.
+		 *
+		 * @since 4.9.0
+		 * @returns {boolean} True if future date.
+		 */
+		isFutureDate: function isFutureDate() {
+			var control = this;
+			return 0 < api.utils.getRemainingTime( control.convertInputDateToString() );
+		},
+
+		/**
+		 * Convert hour in twelve hour format to twenty four hour format.
+		 *
+		 * @since 4.9.0
+		 * @param {string} hourInTwelveHourFormat Hour in twelve hour format.
+		 * @param {string} ampm am/pm
+		 * @return {string} Hour in twenty four hour format.
+		 */
+		convertHourToTwentyFourHourFormat: function convertHour( hourInTwelveHourFormat, ampm ) {
+			var hourInTwentyFourHourFormat, hour, midDayHour = 12;
+
+			hour = parseInt( hourInTwelveHourFormat, 10 );
+
+			if ( 'pm' === ampm && hour < midDayHour ) {
+				hourInTwentyFourHourFormat = hour + midDayHour;
+			} else if ( 'am' === ampm && midDayHour === hour ) {
+				hourInTwentyFourHourFormat = hour - midDayHour;
+			} else {
+				hourInTwentyFourHourFormat = hour;
+			}
+
+			return String( hourInTwentyFourHourFormat );
+		},
+
+		/**
+		 * Populates date inputs in date fields.
+		 *
+		 * @since 4.9.0
+		 * @returns {boolean} Whether the inputs were populated.
+		 */
+		populateDateInputs: function populateDateInputs() {
+			var control = this, parsed;
+
+			parsed = control.parseDateTime( control.setting.get(), control.params.twelveHourFormat );
+
+			if ( ! parsed ) {
+				return false;
+			}
+
+			_.each( control.inputElements, function( element, component ) {
+				element.set( parsed[ component ] );
+			} );
+
+			return true;
+		},
+
+		/**
+		 * Toggle future date notification for date control.
+		 *
+		 * @since 4.9.0
+		 * @param {boolean} notify Add or remove the notification.
+		 * @return {wp.customize.DateTimeControl}
+		 */
+		toggleFutureDateNotification: function toggleFutureDateNotification( notify ) {
+			var control = this, notificationCode, notification;
+
+			notificationCode = 'not_future_date';
+
+			if ( notify ) {
+				notification = new api.Notification( notificationCode, {
+					type: 'error',
+					message: api.l10n.futureDateError
+				} );
+				control.notifications.add( notificationCode, notification );
+			} else {
+				control.notifications.remove( notificationCode );
+			}
+
+			return control;
+		}
+	});
+
+	/**
+	 * Class PreviewLinkControl.
+	 *
+	 * @since 4.9.0
+	 * @constructor
+	 * @augments wp.customize.Control
+	 * @augments wp.customize.Class
+	 */
+	api.PreviewLinkControl = api.Control.extend({
+
+		previewElements: {},
+
+		/**
+		 * Override the templateSelector before embedding the control into the page.
+		 *
+		 * @since 4.9.0
+		 * @return {void}
+		 */
+		embed: function() {
+			var control = this;
+			control.templateSelector = 'customize-preview-link-control';
+			return api.Control.prototype.embed.apply( control, arguments );
+		},
+
+		/**
+		 * Initialize behaviors.
+		 *
+		 * @since 4.9.0
+		 * @returns {void}
+		 */
+		ready: function ready() {
+			var control = this, element, component, node, link, input, button;
+
+			_.bindAll( control, 'updatePreviewLink' );
+
+			if ( ! control.setting ) {
+			    control.setting = new api.Value();
+			}
+
+			control.container.find( '.preview-control-element' ).each( function() {
+				node = $( this );
+				component = node.data( 'component' );
+				element = new api.Element( node );
+				control.previewElements[ component ] = element;
+				control.elements.push( element );
+			} );
+
+			link = control.previewElements.link;
+			input = control.previewElements.input;
+			button = control.previewElements.button;
+
+			input.link( control.setting );
+			link.link( control.setting );
+
+			link.bind( function( value ) {
+				link.element.attr( 'href', value );
+				link.element.attr( 'target', api.settings.changeset.uuid );
+			} );
+
+			api.bind( 'ready', control.updatePreviewLink );
+			api.bind( 'change', control.updatePreviewLink );
+			api.state( 'saved' ).bind( control.updatePreviewLink );
+
+			button.element.on( 'click', function( event ) {
+				event.preventDefault();
+				if ( control.setting() ) {
+					input.element.select();
+					document.execCommand( 'copy' );
+					button( button.element.data( 'copied-text' ) );
+				}
+			} );
+
+			link.element.on( 'click', function( event ) {
+				if ( link.element.hasClass( 'disabled' ) ) {
+					event.preventDefault();
+				}
+			} );
+
+			button.element.on( 'mouseenter', function() {
+				if ( control.setting() ) {
+					button( button.element.data( 'copy-text' ) );
+				}
+			} );
+		},
+
+		/**
+		 * Updates Preview Link
+		 *
+		 * @since 4.9.0
+		 * @return {void}
+		 */
+		updatePreviewLink: function updatePreviewLink() {
+			var control = this, unsavedDirtyValues;
+
+			unsavedDirtyValues = ! _.isEmpty( api.dirtyValues( {
+				unsaved: true
+			} ) );
+
+			control.toggleSaveNotification( unsavedDirtyValues );
+			control.previewElements.link.element.toggleClass( 'disabled', unsavedDirtyValues );
+			control.previewElements.button.element.prop( 'disabled', unsavedDirtyValues );
+			control.setting.set( api.previewer.getFrontendPreviewUrl() );
+		},
+
+		/**
+		 * Toggles save notification.
+		 *
+		 * @since 4.9.0
+		 * @param {boolean} notify Add or remove notification.
+		 * @return {void}
+		 */
+		toggleSaveNotification: function toggleSaveNotification( notify ) {
+			var control = this, notificationCode, notification;
+
+			notificationCode = 'changes_not_saved';
+
+			if ( notify ) {
+				notification = new api.Notification( notificationCode, {
+					type: 'info',
+					message: api.l10n.saveBeforeShare
+				} );
+				control.notifications.add( notificationCode, notification );
+			} else {
+				control.notifications.remove( notificationCode );
+			}
+		}
+	});
+
 	// Change objects contained within the main customize object to Settings.
 	api.defaultConstructor = api.Setting;
 
@@ -4015,6 +4676,9 @@
 					customize_messenger_channel: previewFrame.query.customize_messenger_channel
 				}
 			);
+			if ( api.settings.changeset.autosaved || ! api.state( 'saved' ).get() ) {
+				params.customize_autosaved = 'on';
+			}
 
 			urlParser.search = $.param( params );
 			previewFrame.iframe = $( '<iframe />', {
@@ -4251,6 +4915,7 @@
 					delete queryParams.customize_changeset_uuid;
 					delete queryParams.customize_theme;
 					delete queryParams.customize_messenger_channel;
+					delete queryParams.customize_autosaved;
 					if ( _.isEmpty( queryParams ) ) {
 						urlParser.search = '';
 					} else {
@@ -4612,11 +5277,13 @@
 		background:          api.BackgroundControl,
 		background_position: api.BackgroundPositionControl,
 		theme:               api.ThemeControl,
+		date_time:           api.DateTimeControl,
 		code_editor:         api.CodeEditorControl
 	};
 	api.panelConstructor = {};
 	api.sectionConstructor = {
-		themes: api.ThemesSection
+		themes: api.ThemesSection,
+		outer: api.OuterSection
 	};
 
 	/**
@@ -4788,6 +5455,28 @@
 		api.trigger( 'pane-contents-reflowed' );
 	}, api );
 
+	// Define state values.
+	api.state = new api.Values();
+	_.each( [
+		'saved',
+		'autosaved',
+		'saving',
+		'activated',
+		'processing',
+		'paneVisible',
+		'expandedPanel',
+		'expandedSection',
+		'changesetDate',
+		'selectedChangesetDate',
+		'changesetStatus',
+		'selectedChangesetStatus',
+		'remainingTimeToPublish',
+		'previewerAlive',
+		'editShortcutVisibility'
+	], function( name ) {
+		api.state.create( name );
+	});
+
 	$( function() {
 		api.settings = window._wpCustomizeSettings;
 		api.l10n = window._wpCustomizeControlsL10n;
@@ -4815,7 +5504,60 @@
 			title = $( '#customize-info .panel-title.site-title' ),
 			closeBtn = $( '.customize-controls-close' ),
 			saveBtn = $( '#save' ),
+			btnWrapper = $( '#customize-save-button-wrapper' ),
+			publishSettingsBtn = $( '#publish-settings' ),
 			footerActions = $( '#customize-footer-actions' );
+
+		saveBtn.show();
+
+		api.section( 'publish_settings', function( section ) {
+			var updateButtonsState, previewLinkControl, previewLinkControlId = 'changeset_preview_link';
+
+			previewLinkControl = new api.PreviewLinkControl( previewLinkControlId, {
+				params: {
+					section: section.id,
+					active: true,
+					priority: 100,
+					content: '<li id="customize-control-' + previewLinkControlId + '" class="customize-control"></li>'
+				}
+			} );
+
+			api.control.add( previewLinkControlId, previewLinkControl );
+
+			// Make sure publish settings are not available until the theme has been activated.
+			if ( ! api.settings.theme.active ) {
+				section.active.set( false );
+				section.active.link( api.state( 'activated' ) );
+			}
+
+			// Bind visibility of the publish settings button to whether the section is active.
+			updateButtonsState = function() {
+				publishSettingsBtn.toggle( section.active.get() );
+				saveBtn.toggleClass( 'has-next-sibling', section.active.get() );
+			};
+			updateButtonsState();
+			section.active.bind( updateButtonsState );
+
+			section.contentContainer.find( '.customize-action' ).text( api.l10n.updating );
+			section.contentContainer.find( '.customize-section-back' ).removeAttr( 'tabindex' );
+			publishSettingsBtn.prop( 'disabled', false );
+
+			publishSettingsBtn.on( 'click', function( event ) {
+				event.preventDefault();
+				section.expanded.set( ! section.expanded.get() );
+			} );
+
+			section.expanded.bind( function( isExpanded ) {
+				publishSettingsBtn.attr( 'aria-expanded', String( isExpanded ) );
+				publishSettingsBtn.toggleClass( 'active', isExpanded );
+			} );
+
+			api.state( 'changesetStatus' ).bind( function( status ) {
+			    if ( 'publish' === status ) {
+					section.collapse();
+			    }
+			} );
+		} );
 
 		// Prevent the form from saving when enter is pressed on an input or select element.
 		$('#customize-controls').on( 'keydown', function( e ) {
@@ -4875,6 +5617,9 @@
 					nonce: this.nonce.preview,
 					customize_changeset_uuid: api.settings.changeset.uuid
 				};
+				if ( api.settings.changeset.autosaved || ! api.state( 'saved' ).get() ) {
+					queryVars.customize_autosaved = 'on';
+				}
 
 				/*
 				 * Exclude customized data if requested especially for calls to requestChangesetUpdate.
@@ -4908,13 +5653,15 @@
 			save: function( args ) {
 				var previewer = this,
 					deferred = $.Deferred(),
-					changesetStatus = 'publish',
+					changesetStatus = api.state( 'selectedChangesetStatus' ).get(),
+					selectedChangesetDate = api.state( 'selectedChangesetDate' ).get(),
 					processing = api.state( 'processing' ),
 					submitWhenDoneProcessing,
 					submit,
 					modifiedWhileSaving = {},
 					invalidSettings = [],
-					invalidControls;
+					invalidControls = [],
+					invalidSettingLessControls = [];
 
 				if ( args && args.status ) {
 					changesetStatus = args.status;
@@ -4953,17 +5700,34 @@
 							}
 						} );
 					} );
-					invalidControls = api.findControlsForSettings( invalidSettings );
+
+					/**
+					 * Find all invalid setting less controls with notification type error.
+					 */
+					api.control.each( function( control ) {
+						if ( ! control.setting || ! control.setting.id && control.active.get() ) {
+							control.notifications.each( function( notification ) {
+							    if ( 'error' === notification.type ) {
+								    invalidSettingLessControls.push( [ control ] );
+							    }
+							} );
+						}
+					} );
+
+					invalidControls = _.union( invalidSettingLessControls, _.values( api.findControlsForSettings( invalidSettings ) ) );
 					if ( ! _.isEmpty( invalidControls ) ) {
-						_.values( invalidControls )[0][0].focus();
+
+						invalidControls[0][0].focus();
 						api.unbind( 'change', captureSettingModifiedDuringSave );
 
-						api.notifications.add( errorCode, new api.Notification( errorCode, {
-							message: ( 1 === invalidSettings.length ? api.l10n.saveBlockedError.singular : api.l10n.saveBlockedError.plural ).replace( /%s/g, String( invalidSettings.length ) ),
-							type: 'error',
-							dismissible: true,
-							saveFailure: true
-						} ) );
+						if ( invalidSettings.length ) {
+							api.notifications.add( errorCode, new api.Notification( errorCode, {
+								message: ( 1 === invalidSettings.length ? api.l10n.saveBlockedError.singular : api.l10n.saveBlockedError.plural ).replace( /%s/g, String( invalidSettings.length ) ),
+								type: 'error',
+								dismissible: true,
+								saveFailure: true
+							} ) );
+						}
 
 						deferred.rejectWith( previewer, [
 							{ setting_invalidities: settingInvalidities }
@@ -4980,9 +5744,13 @@
 						nonce: previewer.nonce.save,
 						customize_changeset_status: changesetStatus
 					} );
+
 					if ( args && args.date ) {
 						query.customize_changeset_date = args.date;
+					} else if ( 'future' === changesetStatus && selectedChangesetDate ) {
+						query.customize_changeset_date = selectedChangesetDate;
 					}
+
 					if ( args && args.title ) {
 						query.customize_changeset_title = args.title;
 					}
@@ -5019,6 +5787,13 @@
 					});
 
 					request.fail( function ( response ) {
+						var notification, notificationArgs;
+						notificationArgs = {
+							type: 'error',
+							dismissible: true,
+							fromServer: true,
+							saveFailure: true
+						};
 
 						if ( '0' === response ) {
 							response = 'not_logged_in';
@@ -5036,21 +5811,21 @@
 								previewer.preview.iframe.show();
 							} );
 						} else if ( response.code ) {
-							api.notifications.add( response.code, new api.Notification( response.code, {
-								message: response.message,
-								type: 'error',
-								dismissible: true,
-								fromServer: true,
-								saveFailure: true
-							} ) );
+							if ( 'not_future_date' === response.code && api.section.has( 'publish_settings' ) && api.section( 'publish_settings' ).active.get() && api.control.has( 'changeset_scheduled_date' ) ) {
+								api.control( 'changeset_scheduled_date' ).toggleFutureDateNotification( true ).focus();
+							} else {
+								notification = new api.Notification( response.code, _.extend( notificationArgs, {
+									message: response.message
+								} ) );
+							}
 						} else {
-							api.notifications.add( 'unknown_error', new api.Notification( 'unknown_error', {
-								message: api.l10n.serverSaveError,
-								type: 'error',
-								dismissible: true,
-								fromServer: true,
-								saveFailure: true
+							notification = new api.Notification( 'unknown_error', _.extend( notificationArgs, {
+								message: api.l10n.serverSaveError
 							} ) );
+						}
+
+						if ( notification ) {
+							api.notifications.add( notification.code, notification );
 						}
 
 						if ( response.setting_validities ) {
@@ -5062,6 +5837,14 @@
 
 						deferred.rejectWith( previewer, [ response ] );
 						api.trigger( 'error', response );
+
+						// Start a new changeset if the underlying changeset was published.
+						if ( 'changeset_already_published' === response.code && response.next_changeset_uuid ) {
+							api.settings.changeset.uuid = response.next_changeset_uuid;
+							api.state( 'changesetStatus' ).set( '' );
+							parent.send( 'changeset-uuid', api.settings.changeset.uuid );
+							api.previewer.send( 'changeset-uuid', api.settings.changeset.uuid );
+						}
 					} );
 
 					request.done( function( response ) {
@@ -5069,6 +5852,8 @@
 						previewer.send( 'saved', response );
 
 						api.state( 'changesetStatus' ).set( response.changeset_status );
+						api.state( 'changesetDate' ).set( response.changeset_date );
+
 						if ( 'publish' === response.changeset_status ) {
 
 							// Mark all published as clean if they haven't been modified during the request.
@@ -5088,6 +5873,9 @@
 							api.settings.changeset.uuid = response.next_changeset_uuid;
 							parent.send( 'changeset-uuid', api.settings.changeset.uuid );
 						}
+
+						// Prevent subsequent requestChangesetUpdate() calls from including the settings that have been saved.
+						api._lastSavedRevision = Math.max( latestRevision, api._lastSavedRevision );
 
 						if ( response.setting_validities ) {
 							api._handleSettingValidities( {
@@ -5119,6 +5907,28 @@
 				}
 
 				return deferred.promise();
+			},
+
+			/**
+			 * Builds the front preview url with the current state of customizer.
+			 *
+			 * @since 4.9
+			 *
+			 * @return {string} Preview url.
+			 */
+			getFrontendPreviewUrl: function() {
+				var previewer = this,
+					a = document.createElement( 'a' ),
+					params = {};
+
+				if ( api.state( 'changesetStatus' ).get() && 'publish' !== api.state( 'changesetStatus' ).get() ) {
+					params.customize_changeset_uuid = api.settings.changeset.uuid;
+				}
+
+				a.href = previewer.previewUrl();
+				a.search = $.param( params );
+
+				return a.href;
 			}
 		});
 
@@ -5245,47 +6055,90 @@
 		});
 
 		// Save and activated states
-		(function() {
-			var state = new api.Values(),
-				saved = state.create( 'saved' ),
-				saving = state.create( 'saving' ),
-				activated = state.create( 'activated' ),
-				processing = state.create( 'processing' ),
-				paneVisible = state.create( 'paneVisible' ),
-				expandedPanel = state.create( 'expandedPanel' ),
-				expandedSection = state.create( 'expandedSection' ),
-				changesetStatus = state.create( 'changesetStatus' ),
-				previewerAlive = state.create( 'previewerAlive' ),
-				editShortcutVisibility  = state.create( 'editShortcutVisibility' ),
+		(function( state ) {
+			var saved = state.instance( 'saved' ),
+				saving = state.instance( 'saving' ),
+				activated = state.instance( 'activated' ),
+				processing = state.instance( 'processing' ),
+				paneVisible = state.instance( 'paneVisible' ),
+				expandedPanel = state.instance( 'expandedPanel' ),
+				expandedSection = state.instance( 'expandedSection' ),
+				changesetStatus = state.instance( 'changesetStatus' ),
+				selectedChangesetStatus = state.instance( 'selectedChangesetStatus' ),
+				changesetDate = state.instance( 'changesetDate' ),
+				selectedChangesetDate = state.instance( 'selectedChangesetDate' ),
+				previewerAlive = state.instance( 'previewerAlive' ),
+				editShortcutVisibility  = state.instance( 'editShortcutVisibility' ),
 				populateChangesetUuidParam;
 
 			state.bind( 'change', function() {
 				var canSave;
 
+				btnWrapper.removeClass( 'button-see-me' );
+
 				if ( ! activated() ) {
 					saveBtn.val( api.l10n.activate );
 					closeBtn.find( '.screen-reader-text' ).text( api.l10n.cancel );
+					publishSettingsBtn.prop( 'disabled', false );
 
 				} else if ( '' === changesetStatus.get() && saved() ) {
-					saveBtn.val( api.l10n.saved );
+					if ( api.settings.changeset.currentUserCanPublish ) {
+						saveBtn.val( api.l10n.published );
+					} else {
+						saveBtn.val( api.l10n.saved );
+					}
+					publishSettingsBtn.prop( 'disabled', true );
 					closeBtn.find( '.screen-reader-text' ).text( api.l10n.close );
 
 				} else {
-					saveBtn.val( api.l10n.save );
+					if ( 'draft' === selectedChangesetStatus() ) {
+						if ( saved() && selectedChangesetStatus() === changesetStatus() ) {
+							saveBtn.val( api.l10n.draftSaved );
+						} else {
+							saveBtn.val( api.l10n.saveDraft );
+						}
+					} else if ( 'future' === selectedChangesetStatus() ) {
+						if ( saved() && selectedChangesetStatus() === changesetStatus() ) {
+							if ( changesetDate.get() !== selectedChangesetDate.get() ) {
+								saveBtn.val( api.l10n.schedule );
+								btnWrapper.addClass( 'button-see-me' );
+							} else {
+								saveBtn.val( api.l10n.scheduled );
+							}
+						} else {
+							btnWrapper.addClass( 'button-see-me' );
+							saveBtn.val( api.l10n.schedule );
+						}
+					} else if ( ! api.settings.changeset.currentUserCanPublish ) {
+						selectedChangesetStatus( 'draft' );
+					} else {
+						saveBtn.val( api.l10n.publish );
+					}
 					closeBtn.find( '.screen-reader-text' ).text( api.l10n.cancel );
+					publishSettingsBtn.prop( 'disabled', false );
 				}
 
 				/*
 				 * Save (publish) button should be enabled if saving is not currently happening,
 				 * and if the theme is not active or the changeset exists but is not published.
 				 */
-				canSave = ! saving() && ( ! activated() || ! saved() || ( '' !== changesetStatus() && 'publish' !== changesetStatus() ) );
+				canSave = ! saving() && ( ! activated() || ! saved() || ( changesetStatus() !== selectedChangesetStatus() && '' !== changesetStatus() ) || ( 'future' === selectedChangesetStatus() && changesetDate.get() !== selectedChangesetDate.get() ) );
 
 				saveBtn.prop( 'disabled', ! canSave );
 			});
 
+			selectedChangesetStatus.validate = function( status ) {
+				if ( '' === status || 'auto-draft' === status ) {
+					return null;
+				}
+				return status;
+			};
+
 			// Set default states.
 			changesetStatus( api.settings.changeset.status );
+			changesetDate( api.settings.changeset.publishDate );
+			selectedChangesetStatus( '' === api.settings.changeset.status || 'auto-draft' === api.settings.changeset.status ? 'publish' : api.settings.changeset.status );
+			selectedChangesetStatus.link( changesetStatus ); // Ensure that direct updates to status on server via wp.customizer.previewer.save() will update selection.
 			saved( true );
 			if ( '' === changesetStatus() ) { // Handle case for loading starter content.
 				api.each( function( setting ) {
@@ -5306,9 +6159,17 @@
 			api.bind( 'change', function() {
 				if ( state( 'saved' ).get() ) {
 					state( 'saved' ).set( false );
-					populateChangesetUuidParam( true );
 				}
 			});
+
+			// Populate changeset UUID param when state becomes dirty.
+			if ( api.settings.changeset.branching ) {
+				saved.bind( function( isSaved ) {
+					if ( ! isSaved ) {
+						populateChangesetUuidParam( true );
+					}
+				});
+			}
 
 			saving.bind( function( isSaving ) {
 				body.toggleClass( 'saving', isSaving );
@@ -5362,13 +6223,134 @@
 				history.replaceState( {}, document.title, urlParser.href );
 			};
 
-			changesetStatus.bind( function( newStatus ) {
-				populateChangesetUuidParam( '' !== newStatus && 'publish' !== newStatus );
+			/**
+			 * Deactivate themes section if changeset status is not auto-draft
+			 */
+			api.section( 'themes', function( section ) {
+				var canActivate;
+
+				canActivate = function() {
+					return ! changesetStatus() || 'auto-draft' === changesetStatus();
+				};
+
+				section.active.validate = canActivate;
+				section.active.set( canActivate() );
+				changesetStatus.bind( function() {
+					section.active.set( canActivate() );
+				} );
 			} );
 
-			// Expose states to the API.
-			api.state = state;
-		}());
+			// Show changeset UUID in URL when in branching mode and there is a saved changeset.
+			if ( api.settings.changeset.branching ) {
+				changesetStatus.bind( function( newStatus ) {
+					populateChangesetUuidParam( '' !== newStatus && 'publish' !== newStatus );
+				} );
+			}
+		}( api.state ) );
+
+		// Set up initial notifications.
+		(function() {
+
+			/**
+			 * Obtain the URL to restore the autosave.
+			 *
+			 * @returns {string} Customizer URL.
+			 */
+			function getAutosaveRestorationUrl() {
+				var urlParser, queryParams;
+				urlParser = document.createElement( 'a' );
+				urlParser.href = location.href;
+				queryParams = api.utils.parseQueryString( urlParser.search.substr( 1 ) );
+				if ( api.settings.changeset.latestAutoDraftUuid ) {
+					queryParams.changeset_uuid = api.settings.changeset.latestAutoDraftUuid;
+				} else {
+					queryParams.customize_autosaved = 'on';
+				}
+				urlParser.search = $.param( queryParams );
+				return urlParser.href;
+			}
+
+			/**
+			 * Remove parameter from the URL.
+			 *
+			 * @param {Array} params - Parameter names to remove.
+			 * @returns {void}
+			 */
+			function stripParamsFromLocation( params ) {
+				var urlParser = document.createElement( 'a' ), queryParams, strippedParams = 0;
+				urlParser.href = location.href;
+				queryParams = api.utils.parseQueryString( urlParser.search.substr( 1 ) );
+				_.each( params, function( param ) {
+					if ( 'undefined' !== typeof queryParams[ param ] ) {
+						strippedParams += 1;
+						delete queryParams[ param ];
+					}
+				} );
+				if ( 0 === strippedParams ) {
+					return;
+				}
+
+				urlParser.search = $.param( queryParams );
+				history.replaceState( {}, document.title, urlParser.href );
+			}
+
+			/**
+			 * Add notification regarding the availability of an autosave to restore.
+			 *
+			 * @returns {void}
+			 */
+			function addAutosaveRestoreNotification() {
+				var code = 'autosave_available', onStateChange;
+
+				// Since there is an autosave revision and the user hasn't loaded with autosaved, add notification to prompt to load autosaved version.
+				api.notifications.add( code, new api.Notification( code, {
+					message: api.l10n.autosaveNotice,
+					type: 'warning',
+					dismissible: true,
+					render: function() {
+						var li = api.Notification.prototype.render.call( this ), link;
+
+						// Handle clicking on restoration link.
+						link = li.find( 'a' );
+						link.prop( 'href', getAutosaveRestorationUrl() );
+						link.on( 'click', function( event ) {
+							event.preventDefault();
+							location.replace( getAutosaveRestorationUrl() );
+						} );
+
+						// Handle dismissal of notice.
+						li.find( '.notice-dismiss' ).on( 'click', function() {
+							wp.ajax.post( 'dismiss_customize_changeset_autosave', {
+								wp_customize: 'on',
+								customize_theme: api.settings.theme.stylesheet,
+								customize_changeset_uuid: api.settings.changeset.uuid,
+								nonce: api.settings.nonce.dismiss_autosave
+							} );
+						} );
+
+						return li;
+					}
+				} ) );
+
+				// Remove the notification once the user starts making changes.
+				onStateChange = function() {
+					api.notifications.remove( code );
+					api.unbind( 'change', onStateChange );
+					api.state( 'changesetStatus' ).unbind( onStateChange );
+				};
+				api.bind( 'change', onStateChange );
+				api.state( 'changesetStatus' ).bind( onStateChange );
+			}
+
+			if ( api.settings.changeset.autosaved ) {
+				stripParamsFromLocation( [ 'customize_autosaved' ] ); // Remove param when restoring autosave revision.
+			} else if ( ! api.settings.changeset.branching && 'auto-draft' === api.settings.changeset.status ) {
+				stripParamsFromLocation( [ 'changeset_uuid' ] ); // Remove UUID when restoring autosave auto-draft.
+			}
+			if ( api.settings.changeset.latestAutoDraftUuid || api.settings.changeset.hasAutosaveRevision ) {
+				addAutosaveRestoreNotification();
+			}
+		})();
 
 		// Check if preview url is valid and load the preview frame.
 		if ( api.previewer.previewUrl() ) {
@@ -5382,18 +6364,22 @@
 			api.previewer.save();
 			event.preventDefault();
 		}).keydown( function( event ) {
-			if ( 9 === event.which ) // tab
+			if ( 9 === event.which ) { // Tab.
 				return;
-			if ( 13 === event.which ) // enter
+			}
+			if ( 13 === event.which ) { // Enter.
 				api.previewer.save();
+			}
 			event.preventDefault();
 		});
 
 		closeBtn.keydown( function( event ) {
-			if ( 9 === event.which ) // tab
+			if ( 9 === event.which ) { // Tab.
 				return;
-			if ( 13 === event.which ) // enter
+			}
+			if ( 13 === event.which ) { // Enter.
 				this.click();
+			}
 			event.preventDefault();
 		});
 
@@ -5733,26 +6719,82 @@
 			channel: 'loader'
 		});
 
-		/*
-		 * If we receive a 'back' event, we're inside an iframe.
-		 * Send any clicks to the 'Return' link to the parent page.
-		 */
-		parent.bind( 'back', function() {
-			closeBtn.on( 'click.customize-controls-close', function( event ) {
-				event.preventDefault();
-				parent.send( 'close' );
-			});
-		});
+		// Handle exiting of Customizer.
+		(function() {
+			var isInsideIframe = false;
 
-		// Prompt user with AYS dialog if leaving the Customizer with unsaved changes
-		$( window ).on( 'beforeunload.customize-confirm', function () {
-			if ( ! api.state( 'saved' )() ) {
-				setTimeout( function() {
-					overlay.removeClass( 'customize-loading' );
-				}, 1 );
-				return api.l10n.saveAlert;
+			function isCleanState() {
+				return api.state( 'saved' ).get() && 'auto-draft' !== api.state( 'changesetStatus' ).get();
 			}
-		} );
+
+			/*
+			 * If we receive a 'back' event, we're inside an iframe.
+			 * Send any clicks to the 'Return' link to the parent page.
+			 */
+			parent.bind( 'back', function() {
+				isInsideIframe = true;
+			});
+
+			// Prompt user with AYS dialog if leaving the Customizer with unsaved changes
+			$( window ).on( 'beforeunload.customize-confirm', function() {
+				if ( ! isCleanState() ) {
+					setTimeout( function() {
+						overlay.removeClass( 'customize-loading' );
+					}, 1 );
+					return api.l10n.saveAlert;
+				}
+			});
+
+			closeBtn.on( 'click.customize-controls-close', function( event ) {
+				var clearedToClose = $.Deferred();
+				event.preventDefault();
+
+				/*
+				 * The isInsideIframe condition is because Customizer is not able to use a confirm()
+				 * since customize-loader.js will also use one. So autosave restorations are disabled
+				 * when customize-loader.js is used.
+				 */
+				if ( isInsideIframe || isCleanState() ) {
+					clearedToClose.resolve();
+				} else if ( confirm( api.l10n.saveAlert ) ) {
+
+					// Mark all settings as clean to prevent another call to requestChangesetUpdate.
+					api.each( function( setting ) {
+						setting._dirty = false;
+					});
+					$( document ).off( 'visibilitychange.wp-customize-changeset-update' );
+					$( window ).off( 'beforeunload.wp-customize-changeset-update' );
+
+					closeBtn.css( 'cursor', 'progress' );
+					if ( '' === api.state( 'changesetStatus' ).get() ) {
+						clearedToClose.resolve();
+					} else {
+						wp.ajax.send( 'dismiss_customize_changeset_autosave', {
+							timeout: 500, // Don't wait too long.
+							data: {
+								wp_customize: 'on',
+								customize_theme: api.settings.theme.stylesheet,
+								customize_changeset_uuid: api.settings.changeset.uuid,
+								nonce: api.settings.nonce.dismiss_autosave
+							}
+						} ).always( function() {
+							clearedToClose.resolve();
+						} );
+					}
+				} else {
+					clearedToClose.reject();
+				}
+
+				clearedToClose.done( function() {
+					$( window ).off( 'beforeunload.customize-confirm' );
+					if ( isInsideIframe ) {
+						parent.send( 'close' );
+					} else {
+						window.location.href = closeBtn.prop( 'href' );
+					}
+				} );
+			});
+		})();
 
 		// Pass events through to the parent.
 		$.each( [ 'saved', 'change' ], function ( i, event ) {
@@ -5968,7 +7010,7 @@
 				});
 			});
 
-			// Set up the section desription behaviors.
+			// Set up the section description behaviors.
 			sectionReady.done( function setupSectionDescription( section ) {
 				var control = api.control( 'custom_css' );
 
@@ -5976,19 +7018,105 @@
 				section.container.find( '.section-description-buttons .section-description-close' ).on( 'click', function() {
 					section.container.find( '.section-meta .customize-section-description:first' )
 						.removeClass( 'open' )
-						.slideUp()
-						.attr( 'aria-expanded', 'false' );
+						.slideUp();
+
+					section.container.find( '.customize-help-toggle' )
+						.attr( 'aria-expanded', 'false' )
+						.focus(); // Avoid focus loss.
 				});
 
 				// Reveal help text if setting is empty.
 				if ( control && ! control.setting.get() ) {
 					section.container.find( '.section-meta .customize-section-description:first' )
 						.addClass( 'open' )
-						.show()
-						.attr( 'aria-expanded', 'true' );
+						.show();
+
+					section.container.find( '.customize-help-toggle' ).attr( 'aria-expanded', 'true' );
 				}
 			});
 		})();
+
+		/**
+		 * Publish settings section and controls.
+		 */
+		api.control( 'changeset_status', 'changeset_scheduled_date', function( statusControl, dateControl ) {
+			$.when( statusControl.deferred.embedded, dateControl.deferred.embedded ).done( function() {
+				var radioNodes, statusElement, toggleDateControl, publishWhenTime, pollInterval, updateTimeArrivedPoller, timeArrivedPollingInterval = 1000;
+
+				radioNodes = statusControl.container.find( 'input[type=radio][name]' );
+				statusElement = new api.Element( radioNodes );
+				statusControl.elements.push( statusElement );
+
+				statusElement.sync( api.state( 'selectedChangesetStatus' ) );
+				statusElement.set( api.state( 'selectedChangesetStatus' ).get() );
+
+				dateControl.notifications.alt = true;
+				dateControl.deferred.embedded.done( function() {
+					api.state( 'selectedChangesetDate' ).sync( dateControl.setting );
+				    api.state( 'selectedChangesetDate' ).set( dateControl.setting() );
+				} );
+
+				publishWhenTime = function() {
+					var publishSettingsSection;
+
+					api.state( 'selectedChangesetStatus' ).set( 'publish' );
+					publishSettingsSection = api.section( 'publish_settings' );
+					if ( publishSettingsSection ) {
+						publishSettingsSection.collapse();
+					}
+					api.previewer.save();
+				};
+
+				// Start countdown for when the dateTime arrives, or clear interval when it is .
+				updateTimeArrivedPoller = function() {
+					var shouldPoll = (
+						'future' === api.state( 'changesetStatus' ).get() &&
+						'future' === api.state( 'selectedChangesetStatus' ).get() &&
+						api.state( 'changesetDate' ).get() &&
+						api.state( 'selectedChangesetDate' ).get() === api.state( 'changesetDate' ).get() &&
+						api.utils.getRemainingTime( api.state( 'changesetDate' ).get() ) >= 0
+					);
+
+					if ( shouldPoll && ! pollInterval ) {
+						pollInterval = setInterval( function() {
+							var remainingTime = api.utils.getRemainingTime( api.state( 'changesetDate' ).get() );
+							api.state( 'remainingTimeToPublish' ).set( remainingTime );
+							if ( remainingTime <= 0 ) {
+								clearInterval( pollInterval );
+								pollInterval = 0;
+								publishWhenTime();
+							}
+						}, timeArrivedPollingInterval );
+					} else if ( ! shouldPoll && pollInterval ) {
+						clearInterval( pollInterval );
+						pollInterval = 0;
+					}
+				};
+
+				api.state( 'changesetDate' ).bind( updateTimeArrivedPoller );
+				api.state( 'selectedChangesetDate' ).bind( updateTimeArrivedPoller );
+				api.state( 'changesetStatus' ).bind( updateTimeArrivedPoller );
+				api.state( 'selectedChangesetStatus' ).bind( updateTimeArrivedPoller );
+				updateTimeArrivedPoller();
+
+				// Ensure dateControl only appears when selected status is future.
+				dateControl.active.validate = function() {
+					return 'future' === statusElement.get();
+				};
+				toggleDateControl = function( value ) {
+					dateControl.active.set( 'future' === value );
+				};
+				toggleDateControl( statusElement.get() );
+				statusElement.bind( toggleDateControl );
+
+				// Show notification on date control when status is future but it isn't a future date.
+				api.state( 'saving' ).bind( function( isSaving ) {
+					if ( isSaving && 'future' === api.state( 'selectedChangesetStatus' ).get() ) {
+						dateControl.toggleFutureDateNotification( ! dateControl.isFutureDate() );
+					}
+				} );
+			} );
+		} );
 
 		// Toggle visibility of Header Video notice when active state change.
 		api.control( 'header_video', function( headerVideoControl ) {
@@ -6071,6 +7199,13 @@
 		( function() {
 			var timeoutId, updateChangesetWithReschedule, scheduleChangesetUpdate, updatePending = false;
 
+			api.state( 'saved' ).bind( function( isSaved ) {
+				if ( ! isSaved && ! api.settings.changeset.autosaved ) {
+					api.settings.changeset.autosaved = true; // Once a change is made then autosaving kicks in.
+					api.previewer.send( 'autosaving' );
+				}
+			} );
+
 			/**
 			 * Request changeset update and then re-schedule the next changeset update time.
 			 *
@@ -6080,7 +7215,7 @@
 			updateChangesetWithReschedule = function() {
 				if ( ! updatePending ) {
 					updatePending = true;
-					api.requestChangesetUpdate().always( function() {
+					api.requestChangesetUpdate( {}, { autosave: true } ).always( function() {
 						updatePending = false;
 					} );
 				}
@@ -6104,8 +7239,10 @@
 			scheduleChangesetUpdate();
 
 			// Save changeset when focus removed from window.
-			$( window ).on( 'blur.wp-customize-changeset-update', function() {
-				updateChangesetWithReschedule();
+			$( document ).on( 'visibilitychange.wp-customize-changeset-update', function() {
+				if ( document.hidden ) {
+					updateChangesetWithReschedule();
+				}
 			} );
 
 			// Save changeset before unloading window.
