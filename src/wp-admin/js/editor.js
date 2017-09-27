@@ -489,8 +489,6 @@ window.wp = window.wp || {};
 			var selectedText = null;
 			var cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
 
-			var bookMarkStart = cursorMarkerSkeleton.clone().addClass( 'mce_SELRES_start' );
-
 			if ( mode === 'range' ) {
 				var markedText = textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition );
 
@@ -504,7 +502,8 @@ window.wp = window.wp || {};
 
 			textArea.value = [
 				textArea.value.slice( 0, htmlModeCursorStartPosition ), // text until the cursor/selection position
-				bookMarkStart[ 0 ].outerHTML,
+				cursorMarkerSkeleton.clone()							// cursor/selection start marker
+					.addClass( 'mce_SELRES_start')[0].outerHTML,
 				selectedText, 											// selected text with end cursor/position marker
 				textArea.value.slice( htmlModeCursorEndPosition )		// text from last cursor/selection position to end
 			].join( '' );
