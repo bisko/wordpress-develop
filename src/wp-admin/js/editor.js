@@ -133,10 +133,10 @@ window.wp = window.wp || {};
 					 */
 					var tinyMCEConfig = $.extend(
 						{},
-						window.tinyMCEPreInit.mceInit[id],
+						window.tinyMCEPreInit.mceInit[ id ],
 						{
-							setup: function(editor) {
-								editor.on('init', function(event) {
+							setup: function( editor ) {
+								editor.on( 'init', function( event ) {
 									focusHTMLBookmarkInVisualEditor( event.target );
 								});
 							}
@@ -228,7 +228,7 @@ window.wp = window.wp || {};
 					ltPos: lastLtPos,
 					gtPos: lastLtPos + closingGt + 1, // offset by one to get the position _after_ the character,
 					tagType: tagType,
-					isClosingTag: !! tagMatch[ 1 ]
+					isClosingTag: !! tagMatch[1]
 				};
 			}
 			return null;
@@ -556,7 +556,7 @@ window.wp = window.wp || {};
 			var elementTop = editor.$( element ).offset().top;
 			var TinyMCEContentAreaTop = editor.$( editor.getContentAreaContainer() ).offset().top;
 
-			var edTools = $('#wp-content-editor-tools');
+			var edTools = $( '#wp-content-editor-tools' );
 			var edToolsHeight = edTools.height();
 			var edToolsOffsetTop = edTools.offset().top;
 
@@ -575,7 +575,7 @@ window.wp = window.wp || {};
 			 * subtracting the height. This gives the scroll position where the top of the editor tools aligns with
 			 * the top of the viewport (under the Master Bar)
 			 */
-			var adjustedScroll = Math.max(selectionPosition - visibleAreaHeight / 2, edToolsOffsetTop - edToolsHeight);
+			var adjustedScroll = Math.max( selectionPosition - visibleAreaHeight / 2, edToolsOffsetTop - edToolsHeight );
 
 			$( 'html,body' ).animate( {
 				scrollTop: parseInt( adjustedScroll, 10 )
@@ -632,10 +632,10 @@ window.wp = window.wp || {};
 			 * The elements have hardcoded style that makes them invisible. This is done to avoid seeing
 			 * random content flickering in the editor when switching between modes.
 			 */
-			var spanSkeleton = getCursorMarkerSpan(editor, selectionID);
+			var spanSkeleton = getCursorMarkerSpan( editor, selectionID );
 
-			var startElement = spanSkeleton.clone().addClass('mce_SELRES_start');
-			var endElement = spanSkeleton.clone().addClass('mce_SELRES_end');
+			var startElement = spanSkeleton.clone().addClass( 'mce_SELRES_start' );
+			var endElement = spanSkeleton.clone().addClass( 'mce_SELRES_end' );
 
 			/**
 			 * Inspired by:
@@ -674,8 +674,8 @@ window.wp = window.wp || {};
 			 * If the selection is on a shortcode with Live View, TinyMCE creates a bogus markup,
 			 * which we have to account for.
 			 */
-			if (editor.$(startNode).parents('.mce-offscreen-selection').length > 0) {
-				startNode = editor.$('[data-mce-selected]')[0];
+			if ( editor.$( startNode ).parents( '.mce-offscreen-selection' ).length > 0 ) {
+				startNode = editor.$( '[data-mce-selected]' )[0];
 
 				editor.$( startNode ).before( startElement[ 0 ] );
 				editor.$( startNode ).after( endElement[ 0 ] );
