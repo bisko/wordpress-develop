@@ -258,7 +258,7 @@ window.wp = window.wp || {};
 			var contentShortcodes = getShortCodePositionsInText( content );
 
 			return _.find( contentShortcodes, function( element ) {
-				return cursorPosition >= element.startIndex && cursorPosition <= element.endIndex
+				return cursorPosition >= element.startIndex && cursorPosition <= element.endIndex;
 			} );
 		}
 
@@ -274,8 +274,7 @@ window.wp = window.wp || {};
 				_.map( shortcodes, function( element ) {
 					return element.replace( /^\[+/g, '' );
 				} )
-			)
-
+			);
 		}
 
 		/**
@@ -296,9 +295,9 @@ window.wp = window.wp || {};
 			var defaultPreviewableShortcodes = [ 'caption' ];
 
 			return (
-				defaultPreviewableShortcodes.indexOf( shortcode ) !== - 1
-				|| wp.mce.views.get( shortcode ) !== undefined
-			)
+				defaultPreviewableShortcodes.indexOf( shortcode ) !== - 1 ||
+				wp.mce.views.get( shortcode ) !== undefined
+			);
 
 		}
 
@@ -449,7 +448,7 @@ window.wp = window.wp || {};
 			return {
 				cursorStart: cursorStart,
 				cursorEnd: cursorEnd
-			}
+			};
 		}
 
 		/**
@@ -480,9 +479,7 @@ window.wp = window.wp || {};
 				htmlModeCursorEndPosition = adjustedCursorPositions.cursorEnd;
 
 			var mode =
-				htmlModeCursorStartPosition !== htmlModeCursorEndPosition
-					? 'range'
-					: 'single';
+				htmlModeCursorStartPosition !== htmlModeCursorEndPosition ? 'range'	: 'single';
 
 			var selectedText = null;
 			var cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
