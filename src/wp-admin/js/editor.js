@@ -255,8 +255,6 @@ window.wp = window.wp || {};
 		 *                                Information about the wrapping shortcode tag if it's wrapped in one.
 		 */
 		function getShortcodeWrapperInfo( content, cursorPosition ) {
-			// TODO add exception for urls / embedURL
-
 			var contentShortcodes = getShortCodePositionsInText( content );
 
 			return _.find( contentShortcodes, function( element ) {
@@ -543,8 +541,6 @@ window.wp = window.wp || {};
 			// Clear the markers from the DOM
 			startNode.remove();
 			endNode.remove();
-			// TODO improve removal of markers to remove parenting empty <p> element if the span is only child
-
 		}
 
 		/**
@@ -561,10 +557,6 @@ window.wp = window.wp || {};
 		 * @param {Object} element HTMLElement that should be scrolled into view.
 		 */
 		function scrollVisualModeToStartElement( editor, element ) {
-			/**
-			 * TODO:
-			 *  * Decide if we should animate the transition or not ( motion sickness/accessibility )
-			 */
 			var elementTop = editor.$( element ).offset().top;
 			var TinyMCEContentAreaTop = editor.$( editor.getContentAreaContainer() ).offset().top;
 
