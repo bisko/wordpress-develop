@@ -210,7 +210,7 @@ window.wp = window.wp || {};
 		 * @returns {(null|Object)} Null if cursor is not in a tag, Object if the cursor is inside a tag.
 		 */
 		function getContainingTagInfo( content, cursorPosition ) {
-			var lastLtPos = content.lastIndexOf( '<', cursorPosition ),
+			var lastLtPos = content.lastIndexOf( '<', cursorPosition - 1 ),
 				lastGtPos = content.lastIndexOf( '>', cursorPosition );
 
 			if ( lastLtPos > lastGtPos || content.substr( cursorPosition, 1 ) === '>' ) {
@@ -436,12 +436,12 @@ window.wp = window.wp || {};
 
 			var isCursorStartInShortcode = getShortcodeWrapperInfo( content, cursorStart );
 			if ( isCursorStartInShortcode && isCursorStartInShortcode.isPreviewable ) {
-				cursorStart = isCursorStartInShortcode.startIndex - 1;
+				cursorStart = isCursorStartInShortcode.startIndex;
 			}
 
 			var isCursorEndInShortcode = getShortcodeWrapperInfo( content, cursorEnd );
 			if ( isCursorEndInShortcode && isCursorEndInShortcode.isPreviewable ) {
-				cursorEnd = isCursorEndInShortcode.endIndex + 1;
+				cursorEnd = isCursorEndInShortcode.endIndex;
 			}
 
 			return {
