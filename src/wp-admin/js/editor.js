@@ -478,8 +478,7 @@ window.wp = window.wp || {};
 			var htmlModeCursorStartPosition = adjustedCursorPositions.cursorStart,
 				htmlModeCursorEndPosition = adjustedCursorPositions.cursorEnd;
 
-			var mode =
-				htmlModeCursorStartPosition !== htmlModeCursorEndPosition ? 'range'	: 'single';
+			var mode = htmlModeCursorStartPosition !== htmlModeCursorEndPosition ? 'range' : 'single';
 
 			var selectedText = null;
 			var cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
