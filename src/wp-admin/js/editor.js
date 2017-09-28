@@ -215,14 +215,15 @@ window.wp = window.wp || {};
 
 			if ( lastLtPos > lastGtPos || content.substr( cursorPosition, 1 ) === '>' ) {
 				// find what the tag is
-				var tagContent = content.substr( lastLtPos );
-				var tagMatch = tagContent.match( /<\s*(\/)?(\w+)/ );
+				var tagContent = content.substr( lastLtPos ),
+					tagMatch = tagContent.match( /<\s*(\/)?(\w+)/ );
+
 				if ( ! tagMatch ) {
 					return null;
 				}
 
-				var tagType = tagMatch[ 2 ];
-				var closingGt = tagContent.indexOf( '>' );
+				var tagType = tagMatch[ 2 ],
+					closingGt = tagContent.indexOf( '>' );
 
 				return {
 					ltPos: lastLtPos,
@@ -324,9 +325,8 @@ window.wp = window.wp || {};
 				return [];
 			}
 
-			var shortcodeDetailsRegexp = wp.shortcode.regexp( allShortcodes.join( '|' ) );
-
-			var shortcodeMatch, // Define local scope for the variable to be used in the loop below.
+			var shortcodeDetailsRegexp = wp.shortcode.regexp( allShortcodes.join( '|' ) ),
+				shortcodeMatch, // Define local scope for the variable to be used in the loop below.
 				shortcodesDetails = [];
 
 			while ( shortcodeMatch = shortcodeDetailsRegexp.exec( content ) ) {
@@ -346,16 +346,15 @@ window.wp = window.wp || {};
 				 * In addition, if the shortcode will get rendered as plain text ( see above ),
 				 * we can treat it as text and use the selection markers in it.
 				 */
-				var isPreviewable = ! showAsPlainText && isShortcodePreviewable( shortcodeMatch[ 2 ] );
-
-				var shortcodeInfo = {
-					shortcodeName: shortcodeMatch[ 2 ],
-					showAsPlainText: showAsPlainText,
-					startIndex: shortcodeMatch.index,
-					endIndex: shortcodeMatch.index + shortcodeMatch[ 0 ].length,
-					length: shortcodeMatch[ 0 ].length,
-					isPreviewable: isPreviewable
-				};
+				var isPreviewable = ! showAsPlainText && isShortcodePreviewable( shortcodeMatch[ 2 ] ),
+					shortcodeInfo = {
+						shortcodeName: shortcodeMatch[ 2 ],
+						showAsPlainText: showAsPlainText,
+						startIndex: shortcodeMatch.index,
+						endIndex: shortcodeMatch.index + shortcodeMatch[ 0 ].length,
+						length: shortcodeMatch[ 0 ].length,
+						isPreviewable: isPreviewable
+					};
 
 				shortcodesDetails.push( shortcodeInfo );
 			}
@@ -404,10 +403,10 @@ window.wp = window.wp || {};
 			];
 
 			var cursorStart = cursorPositions.cursorStart,
-				cursorEnd = cursorPositions.cursorEnd;
+				cursorEnd = cursorPositions.cursorEnd,
+				// check if the cursor is in a tag and if so, adjust it
+				isCursorStartInTag = getContainingTagInfo( content, cursorStart );
 
-			// check if the cursor is in a tag and if so, adjust it
-			var isCursorStartInTag = getContainingTagInfo( content, cursorStart );
 			if ( isCursorStartInTag ) {
 				/**
 				 * Only move to the start of the HTML tag (to select the whole element) if the tag
@@ -468,25 +467,24 @@ window.wp = window.wp || {};
 			}
 
 			var textArea = $textarea[ 0 ],
-				textAreaContent = textArea.value;
+				textAreaContent = textArea.value,
 
-			var adjustedCursorPositions = adjustTextAreaSelectionCursors( textAreaContent, {
-				cursorStart: textArea.selectionStart,
-				cursorEnd: textArea.selectionEnd
-			} );
+				adjustedCursorPositions = adjustTextAreaSelectionCursors( textAreaContent, {
+					cursorStart: textArea.selectionStart,
+					cursorEnd: textArea.selectionEnd
+				} ),
 
-			var htmlModeCursorStartPosition = adjustedCursorPositions.cursorStart,
-				htmlModeCursorEndPosition = adjustedCursorPositions.cursorEnd;
+				htmlModeCursorStartPosition = adjustedCursorPositions.cursorStart,
+				htmlModeCursorEndPosition = adjustedCursorPositions.cursorEnd,
 
-			var mode = htmlModeCursorStartPosition !== htmlModeCursorEndPosition ? 'range' : 'single';
+				mode = htmlModeCursorStartPosition !== htmlModeCursorEndPosition ? 'range' : 'single',
 
-			var selectedText = null;
-			var cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
+				selectedText = null,
+				cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
 
 			if ( mode === 'range' ) {
-				var markedText = textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition );
-
-				var bookMarkEnd = cursorMarkerSkeleton.clone().addClass( 'mce_SELRES_end' );
+				var markedText = textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition ),
+					bookMarkEnd = cursorMarkerSkeleton.clone().addClass( 'mce_SELRES_end' );
 
 				selectedText = [
 					markedText,
@@ -553,19 +551,19 @@ window.wp = window.wp || {};
 		 * @param {Object} element HTMLElement that should be scrolled into view.
 		 */
 		function scrollVisualModeToStartElement( editor, element ) {
-			var elementTop = editor.$( element ).offset().top;
-			var TinyMCEContentAreaTop = editor.$( editor.getContentAreaContainer() ).offset().top;
+			var elementTop = editor.$( element ).offset().top,
+				TinyMCEContentAreaTop = editor.$( editor.getContentAreaContainer() ).offset().top,
 
-			var edTools = $( '#wp-content-editor-tools' );
-			var edToolsHeight = edTools.height();
-			var edToolsOffsetTop = edTools.offset().top;
+				edTools = $( '#wp-content-editor-tools' ),
+				edToolsHeight = edTools.height(),
+				edToolsOffsetTop = edTools.offset().top,
 
-			var toolbarHeight = getToolbarHeight( editor );
+				toolbarHeight = getToolbarHeight( editor ),
 
-			var windowHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+				windowHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight,
 
-			var selectionPosition = TinyMCEContentAreaTop + elementTop;
-			var visibleAreaHeight = windowHeight - ( edToolsHeight + toolbarHeight );
+				selectionPosition = TinyMCEContentAreaTop + elementTop,
+				visibleAreaHeight = windowHeight - ( edToolsHeight + toolbarHeight );
 
 			/**
 			 * The minimum scroll height should be to the top of the editor, to offer a consistent
@@ -632,10 +630,9 @@ window.wp = window.wp || {};
 			 * The elements have hardcoded style that makes them invisible. This is done to avoid seeing
 			 * random content flickering in the editor when switching between modes.
 			 */
-			var spanSkeleton = getCursorMarkerSpan( editor, selectionID );
-
-			var startElement = spanSkeleton.clone().addClass( 'mce_SELRES_start' );
-			var endElement = spanSkeleton.clone().addClass( 'mce_SELRES_end' );
+			var spanSkeleton = getCursorMarkerSpan( editor, selectionID ),
+				startElement = spanSkeleton.clone().addClass( 'mce_SELRES_start' ),
+				endElement = spanSkeleton.clone().addClass( 'mce_SELRES_end' );
 
 			/**
 			 * Inspired by:
@@ -717,8 +714,9 @@ window.wp = window.wp || {};
 				'<span[^>]*\\s*class="mce_SELRES_end"[^>]+>\\s*' + selectionID + '[^<]*<\\/span>'
 			);
 
-			var startMatch = content.match( startRegex );
-			var endMatch = content.match( endRegex );
+			var startMatch = content.match( startRegex ),
+				endMatch = content.match( endRegex );
+
 			if ( ! startMatch ) {
 				return null;
 			}
