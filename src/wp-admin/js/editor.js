@@ -286,7 +286,7 @@ window.wp = window.wp || {};
 		 * we don't want to change anything inside them, i.e. inserting a selection marker
 		 * inside the shortcode will break it :(
 		 *
-		 * @see wp-includes/js/mce-view.js
+		 * @link wp-includes/js/mce-view.js
 		 *
 		 * @param {string} shortcode The shortcode to check.
 		 * @return {boolean} If a shortcode has Live Preview or not
@@ -310,7 +310,7 @@ window.wp = window.wp || {};
 		 * This is used to check if the selection cursor is inside the boundaries of a shortcode
 		 * and move it accordingly, to avoid breakage.
 		 *
-		 * @see adjustTextAreaSelectionCursors
+		 * @link adjustTextAreaSelectionCursors
 		 *
 		 * The information can also be used in other cases when we need to lookup shortcode data,
 		 * as it's already structured!
@@ -341,7 +341,7 @@ window.wp = window.wp || {};
 				/**
 				 * For more context check the docs for:
 				 *
-				 * @see isShortcodePreviewable
+				 * @link isShortcodePreviewable
 				 *
 				 * In addition, if the shortcode will get rendered as plain text ( see above ),
 				 * we can treat it as text and use the selection markers in it.
@@ -390,7 +390,7 @@ window.wp = window.wp || {};
 		 * content in Visual mode. If we insert selection markers somewhere inside them, it's really possible
 		 * to break the syntax and render the HTML tag or shortcode broken.
 		 *
-		 * @see getShortcodeWrapperInfo
+		 * @link getShortcodeWrapperInfo
 		 *
 		 * @param {string} content Textarea content that the cursors are in
 		 * @param {{cursorStart: number, cursorEnd: number}} cursorPositions Cursor start and end positions
@@ -737,7 +737,7 @@ window.wp = window.wp || {};
 		 * Selects the text in TinyMCE's textarea that's between `selection.start` and `selection.end`.
 		 *
 		 * For `selection` parameter:
-		 * @see findBookmarkedPosition
+		 * @link findBookmarkedPosition
 		 *
 		 * @param {Object} editor TinyMCE's editor instance.
 		 * @param {Object} selection Selection data.
