@@ -527,7 +527,7 @@ window.wp = window.wp || {};
 				if ( ! endNode.length ) {
 					editor.selection.select( startNode[ 0 ] );
 				} else {
-					const selection = editor.getDoc().createRange();
+					var selection = editor.getDoc().createRange();
 
 					selection.setStartAfter( startNode[ 0 ] );
 					selection.setEndBefore( endNode[ 0 ] );
@@ -566,9 +566,7 @@ window.wp = window.wp || {};
 
 			var toolbarHeight = getToolbarHeight( editor );
 
-			var windowHeight = window.innerHeight
-				|| document.documentElement.clientHeight
-				|| document.body.clientHeight;
+			var windowHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
 
 			var selectionPosition = TinyMCEContentAreaTop + elementTop;
 			var visibleAreaHeight = windowHeight - ( edToolsHeight + toolbarHeight );
@@ -700,7 +698,6 @@ window.wp = window.wp || {};
 				selection.addRange( range );
 			}
 
-
 			/**
 			 * Now the editor's content has the start/end nodes.
 			 *
@@ -734,9 +731,7 @@ window.wp = window.wp || {};
 				start: startMatch.index,
 
 				// We need to adjust the end position to discard the length of the range start marker
-				end: endMatch
-					? endMatch.index - startMatch[ 0 ].length
-					: null
+				end: endMatch ? endMatch.index - startMatch[ 0 ].length : null
 			};
 		}
 
