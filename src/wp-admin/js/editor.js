@@ -684,38 +684,30 @@ window.wp = window.wp || {};
 				startOffset = range.startOffset,
 				boundaryRange = range.cloneRange();
 
-			boundaryRange.collapse( false );
-			boundaryRange.insertNode( endElement[0] );
-
-			// TODO select whole shortcode tags - check for common parent - mceTemp wpview wpview-wrap
-
 			/**
-			 * Sometimes the selection starts at the `<img>` tag, which makes the
-			 * boundary range `insertNode` insert `startElement` inside the `<img>` tag itself, i.e.:
-			 *
-			 * `<img><span class="mce_SELRES_start"...>...</span></img>`
-			 *
-			 * As this is an invalid syntax, it breaks the selection.
-			 *
-			 * The conditional below checks if `startNode` is a tag that suffer from that and
-			 * manually inserts the selection start maker before it.
-			 *
-			 * In the future this will probably include a list of tags, not just `<img>`, depending on the needs.
+			 * If the selection is on a shortcode with Live View, TinyMCE creates a bogus markup,
+			 * which we have to account for.
 			 */
-			if ( startNode && startNode.tagName && startNode.tagName.toLowerCase() === 'img' ) {
+			if (editor.$(startNode).parents('.mce-offscreen-selection').length > 0) {
+				startNode = editor.$('[data-mce-selected]')[0];
+
 				editor.$( startNode ).before( startElement[ 0 ] );
+				editor.$( startNode ).after( endElement[ 0 ] );
 			}
 			else {
+				boundaryRange.collapse( false );
+				boundaryRange.insertNode( endElement[0] );
+
 				boundaryRange.setStart( startNode, startOffset );
 				boundaryRange.collapse( true );
 				boundaryRange.insertNode( startElement[ 0 ] );
+
+				range.setStartAfter( startElement[0] );
+				range.setEndBefore( endElement[0] );
+				selection.removeAllRanges();
+				selection.addRange( range );
 			}
 
-
-			range.setStartAfter( startElement[0] );
-			range.setEndBefore( endElement[0] );
-			selection.removeAllRanges();
-			selection.addRange( range );
 
 			/**
 			 * Now the editor's content has the start/end nodes.
