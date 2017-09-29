@@ -557,7 +557,7 @@ window.wp = window.wp || {};
 			if (
 				! markerParent.length ||
 				markerParent.prop('tagName').toLowerCase() !== 'p' ||
-				markerParent.children() > 1 ||
+				markerParent.children().length > 1 ||
 				! markerParent.prop('outerHTML').match(/^<p>/)
 			) {
 				/**
