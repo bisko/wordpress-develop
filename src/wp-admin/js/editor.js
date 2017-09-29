@@ -119,31 +119,11 @@ window.wp = window.wp || {};
 					// Restore the selection
 					focusHTMLBookmarkInVisualEditor( editor );
 				} else {
-					/**
-					 * TinyMCE is still not loaded. In order to restore the selection
-					 * when the editor loads, a `on('init')` event is added, that will
-					 * do the restoration.
-					 *
-					 * To achieve that, the initialization config is cloned and extended
-					 * to include the `setup` method, which makes it possible to add the
-					 * `on('init')` event.
-					 *
-					 * Cloning is used to prevent modification of the original init config,
-					 * which may cause unwanted side effects.
-					 */
-					var tinyMCEConfig = $.extend(
-						{},
-						window.tinyMCEPreInit.mceInit[ id ],
-						{
-							setup: function( editor ) {
-								editor.on( 'init', function( event ) {
-									focusHTMLBookmarkInVisualEditor( event.target );
-								});
-							}
-						}
-					);
+					$( document ).on( 'tinymce-editor-init', function( event, editor ) {
+						focusHTMLBookmarkInVisualEditor( editor );
+					});
 
-					tinymce.init( tinyMCEConfig );
+					tinymce.init( window.tinyMCEPreInit.mceInit[id] );
 				}
 
 				wrap.removeClass( 'html-active' ).addClass( 'tmce-active' );
@@ -531,7 +511,6 @@ window.wp = window.wp || {};
 			}
 
 			scrollVisualModeToStartElement( editor, startNode );
-
 
 			removeSelectionMarker( editor, startNode );
 			removeSelectionMarker( editor, endNode );
