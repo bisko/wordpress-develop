@@ -123,7 +123,7 @@ window.wp = window.wp || {};
 						focusHTMLBookmarkInVisualEditor( editor );
 					});
 
-					tinymce.init( window.tinyMCEPreInit.mceInit[id] );
+					tinymce.init( window.tinyMCEPreInit.mceInit[ id ] );
 				}
 
 				wrap.removeClass( 'html-active' ).addClass( 'tmce-active' );
