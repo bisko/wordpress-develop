@@ -460,7 +460,7 @@ window.wp = window.wp || {};
 				mode = htmlModeCursorStartPosition !== htmlModeCursorEndPosition ? 'range' : 'single',
 
 				selectedText = null,
-				cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' );
+				cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' ).attr('data-mce-type','bookmark');
 
 			if ( mode === 'range' ) {
 				var markedText = textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition ),
