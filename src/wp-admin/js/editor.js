@@ -222,7 +222,7 @@ window.wp = window.wp || {};
 					return null;
 				}
 
-				var tagType = tagMatch[ 2 ],
+				var tagType = tagMatch[2],
 					closingGt = tagContent.indexOf( '>' );
 
 				return {
@@ -296,7 +296,7 @@ window.wp = window.wp || {};
 			var defaultPreviewableShortcodes = [ 'caption' ];
 
 			return (
-				defaultPreviewableShortcodes.indexOf( shortcode ) !== - 1 ||
+				defaultPreviewableShortcodes.indexOf( shortcode ) !== -1 ||
 				wp.mce.views.get( shortcode ) !== undefined
 			);
 
@@ -336,7 +336,7 @@ window.wp = window.wp || {};
 				 * This corresponds to the [[shortcode]] syntax, which doesn't parse the shortcode
 				 * and just shows it as text.
 				 */
-				var showAsPlainText = shortcodeMatch[ 1 ] === '[';
+				var showAsPlainText = shortcodeMatch[1] === '[';
 
 				/**
 				 * For more context check the docs for:
@@ -346,13 +346,13 @@ window.wp = window.wp || {};
 				 * In addition, if the shortcode will get rendered as plain text ( see above ),
 				 * we can treat it as text and use the selection markers in it.
 				 */
-				var isPreviewable = ! showAsPlainText && isShortcodePreviewable( shortcodeMatch[ 2 ] ),
+				var isPreviewable = ! showAsPlainText && isShortcodePreviewable( shortcodeMatch[2] ),
 					shortcodeInfo = {
-						shortcodeName: shortcodeMatch[ 2 ],
+						shortcodeName: shortcodeMatch[2],
 						showAsPlainText: showAsPlainText,
 						startIndex: shortcodeMatch.index,
-						endIndex: shortcodeMatch.index + shortcodeMatch[ 0 ].length,
-						length: shortcodeMatch[ 0 ].length,
+						endIndex: shortcodeMatch.index + shortcodeMatch[0].length,
+						length: shortcodeMatch[0].length,
 						isPreviewable: isPreviewable
 					};
 
@@ -421,7 +421,7 @@ window.wp = window.wp || {};
 				 * In cases where the tag is not a void element, the cursor is put to the end of the tag,
 				 * so it's either between the opening and closing tag elements or after the closing tag.
 				 */
-				if ( voidElements.indexOf( isCursorStartInTag.tagType ) !== - 1 ) {
+				if ( voidElements.indexOf( isCursorStartInTag.tagType ) !== -1 ) {
 					cursorStart = isCursorStartInTag.ltPos;
 				}
 				else {
@@ -466,7 +466,7 @@ window.wp = window.wp || {};
 				return;
 			}
 
-			var textArea = $textarea[ 0 ],
+			var textArea = $textarea[0],
 				textAreaContent = textArea.value,
 
 				adjustedCursorPositions = adjustTextAreaSelectionCursors( textAreaContent, {
@@ -488,7 +488,7 @@ window.wp = window.wp || {};
 
 				selectedText = [
 					markedText,
-					bookMarkEnd[ 0 ].outerHTML
+					bookMarkEnd[0].outerHTML
 				].join( '' );
 			}
 
@@ -519,12 +519,12 @@ window.wp = window.wp || {};
 				editor.focus();
 
 				if ( ! endNode.length ) {
-					editor.selection.select( startNode[ 0 ] );
+					editor.selection.select( startNode[0] );
 				} else {
 					var selection = editor.getDoc().createRange();
 
-					selection.setStartAfter( startNode[ 0 ] );
-					selection.setEndBefore( endNode[ 0 ] );
+					selection.setStartAfter( startNode[0] );
+					selection.setEndBefore( endNode[0] );
 
 					editor.selection.setRng( selection );
 				}
@@ -724,8 +724,8 @@ window.wp = window.wp || {};
 				startElement.attr('data-mce-object-selection', 'true');
 				endElement.attr('data-mce-object-selection', 'true');
 
-				editor.$( startNode ).before( startElement[ 0 ] );
-				editor.$( startNode ).after( endElement[ 0 ] );
+				editor.$( startNode ).before( startElement[0] );
+				editor.$( startNode ).after( endElement[0] );
 			}
 			else {
 				boundaryRange.collapse( false );
@@ -733,7 +733,7 @@ window.wp = window.wp || {};
 
 				boundaryRange.setStart( startNode, startOffset );
 				boundaryRange.collapse( true );
-				boundaryRange.insertNode( startElement[ 0 ] );
+				boundaryRange.insertNode( startElement[0] );
 
 				range.setStartAfter( startElement[0] );
 				range.setEndBefore( endElement[0] );
@@ -781,14 +781,14 @@ window.wp = window.wp || {};
 				 *
 				 * Check where the `data-mce-object-selection` attribute is set above for more context.
 				 */
-				if ( startMatch[ 0 ].indexOf( 'data-mce-object-selection' ) !== - 1 ) {
-					startMatchLength -= startMatch[ 1 ].length;
+				if ( startMatch[0].indexOf( 'data-mce-object-selection' ) !== -1 ) {
+					startMatchLength -= startMatch[1].length;
 				}
 
 				var endMatchIndex = endMatch.index;
 
-				if ( endMatch[ 0 ].indexOf( 'data-mce-object-selection' ) !== - 1 ) {
-					endMatchIndex -= endMatch[ 1 ].length;
+				if ( endMatch[0].indexOf( 'data-mce-object-selection' ) !== -1 ) {
+					endMatchIndex -= endMatch[1].length;
 				}
 
 				// We need to adjust the end position to discard the length of the range start marker
