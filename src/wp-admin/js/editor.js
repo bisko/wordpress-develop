@@ -460,7 +460,7 @@ window.wp = window.wp || {};
 				mode = htmlModeCursorStartPosition !== htmlModeCursorEndPosition ? 'range' : 'single',
 
 				selectedText = null,
-				cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' ).attr('data-mce-type','bookmark');
+				cursorMarkerSkeleton = getCursorMarkerSpan( { $: jQuery }, '&#65279;' ).attr( 'data-mce-type','bookmark' );
 
 			if ( mode === 'range' ) {
 				var markedText = textArea.value.slice( htmlModeCursorStartPosition, htmlModeCursorEndPosition ),
@@ -475,7 +475,7 @@ window.wp = window.wp || {};
 			textArea.value = [
 				textArea.value.slice( 0, htmlModeCursorStartPosition ), // text until the cursor/selection position
 				cursorMarkerSkeleton.clone()							// cursor/selection start marker
-					.addClass( 'mce_SELRES_start')[0].outerHTML,
+					.addClass( 'mce_SELRES_start' )[0].outerHTML,
 				selectedText, 											// selected text with end cursor/position marker
 				textArea.value.slice( htmlModeCursorEndPosition )		// text from last cursor/selection position to end
 			].join( '' );
@@ -492,8 +492,8 @@ window.wp = window.wp || {};
 		 * @param {Object} editor TinyMCE editor instance.
 		 */
 		function focusHTMLBookmarkInVisualEditor( editor ) {
-			var startNode = editor.$( '.mce_SELRES_start' ),
-				endNode = editor.$( '.mce_SELRES_end' );
+			var startNode = editor.$( '.mce_SELRES_start' ).attr( 'data-mce-bogus', 1 ),
+				endNode = editor.$( '.mce_SELRES_end' ).attr( 'data-mce-bogus', 1 );
 
 			if ( startNode.length ) {
 				editor.focus();
@@ -535,9 +535,9 @@ window.wp = window.wp || {};
 
 			if (
 				! markerParent.length ||
-				markerParent.prop('tagName').toLowerCase() !== 'p' ||
+				markerParent.prop( 'tagName' ).toLowerCase() !== 'p' ||
 				markerParent[0].childNodes.length > 1 ||
-				! markerParent.prop('outerHTML').match(/^<p>/)
+				! markerParent.prop( 'outerHTML' ).match( /^<p>/ )
 			) {
 				/**
 				 * The selection marker is not self-contained in a <p>.
@@ -700,8 +700,8 @@ window.wp = window.wp || {};
 				 * This way we can adjust the selection to properly select only the content, ignoring
 				 * whitespace inserted around the selected object by the Editor.
 				 */
-				startElement.attr('data-mce-object-selection', 'true');
-				endElement.attr('data-mce-object-selection', 'true');
+				startElement.attr( 'data-mce-object-selection', 'true' );
+				endElement.attr( 'data-mce-object-selection', 'true' );
 
 				editor.$( startNode ).before( startElement[0] );
 				editor.$( startNode ).after( endElement[0] );
