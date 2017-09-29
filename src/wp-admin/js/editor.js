@@ -557,7 +557,7 @@ window.wp = window.wp || {};
 			if (
 				! markerParent.length ||
 				markerParent.prop('tagName').toLowerCase() !== 'p' ||
-				markerParent.children().length > 1 ||
+				markerParent[0].childNodes.length > 1 ||
 				! markerParent.prop('outerHTML').match(/^<p>/)
 			) {
 				/**
@@ -714,6 +714,16 @@ window.wp = window.wp || {};
 			if ( editor.$( startNode ).parents( '.mce-offscreen-selection' ).length > 0 ) {
 				startNode = editor.$( '[data-mce-selected]' )[0];
 
+				/**
+				 * Marking the start and end element with `data-mce-object-selection` helps
+				 * discern when the selected object is a Live Preview selection.
+				 *
+				 * This way we can adjust the selection to properly select only the content, ignoring
+				 * whitespace inserted around the selected object by the Editor.
+				 */
+				startElement.attr('data-mce-object-selection', 'true');
+				endElement.attr('data-mce-object-selection', 'true');
+
 				editor.$( startNode ).before( startElement[ 0 ] );
 				editor.$( startNode ).after( endElement[ 0 ] );
 			}
@@ -747,11 +757,11 @@ window.wp = window.wp || {};
 			endElement.remove();
 
 			var startRegex = new RegExp(
-				'<span[^>]*\\s*class="mce_SELRES_start"[^>]+>\\s*' + selectionID + '[^<]*<\\/span>'
+				'<span[^>]*\\s*class="mce_SELRES_start"[^>]+>\\s*' + selectionID + '[^<]*<\\/span>(\\s*)'
 			);
 
 			var endRegex = new RegExp(
-				'<span[^>]*\\s*class="mce_SELRES_end"[^>]+>\\s*' + selectionID + '[^<]*<\\/span>'
+				'(\\s*)<span[^>]*\\s*class="mce_SELRES_end"[^>]+>\\s*' + selectionID + '[^<]*<\\/span>'
 			);
 
 			var startMatch = content.match( startRegex ),
@@ -761,11 +771,33 @@ window.wp = window.wp || {};
 				return null;
 			}
 
-			return {
-				start: startMatch.index,
+			var startIndex = startMatch.index,
+				startMatchLength = startMatch[0].length,
+				endIndex = null;
+
+			if (endMatch) {
+				/**
+				 * Adjust the selection index, if the selection contains a Live Preview object or not.
+				 *
+				 * Check where the `data-mce-object-selection` attribute is set above for more context.
+				 */
+				if ( startMatch[ 0 ].indexOf( 'data-mce-object-selection' ) !== - 1 ) {
+					startMatchLength -= startMatch[ 1 ].length;
+				}
+
+				var endMatchIndex = endMatch.index;
+
+				if ( endMatch[ 0 ].indexOf( 'data-mce-object-selection' ) !== - 1 ) {
+					endMatchIndex -= endMatch[ 1 ].length;
+				}
 
 				// We need to adjust the end position to discard the length of the range start marker
-				end: endMatch ? endMatch.index - startMatch[ 0 ].length : null
+				endIndex = endMatchIndex - startMatchLength;
+			}
+
+			return {
+				start: startIndex,
+				end: endIndex
 			};
 		}
 
