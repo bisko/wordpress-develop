@@ -119,10 +119,6 @@ window.wp = window.wp || {};
 					// Restore the selection
 					focusHTMLBookmarkInVisualEditor( editor );
 				} else {
-					$( document ).on( 'tinymce-editor-init', function( event, editor ) {
-						focusHTMLBookmarkInVisualEditor( editor );
-					});
-
 					tinymce.init( window.tinyMCEPreInit.mceInit[ id ] );
 				}
 
