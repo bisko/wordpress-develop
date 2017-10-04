@@ -249,13 +249,18 @@ window.wp = window.wp || {};
 		 * @param {string} content The content we want to scan for shortcodes.
 		 */
 		function getShortcodesInText( content ) {
-			var shortcodes = content.match( /\[+([\w_-])+/g );
+			var shortcodes = content.match( /\[+([\w_-])+/g ),
+				result = [];
 
-			return _.uniq(
-				_.map( shortcodes, function( element ) {
-					return element.replace( /^\[+/g, '' );
-				} )
-			);
+			for ( var i = 0; i < shortcodes.length; i++ ) {
+				var shortcode = shortcodes[ i ].replace( /^\[+/g, '' );
+
+				if ( result.indexOf( shortcode ) === -1 ) {
+					result.push( shortcode );
+				}
+			}
+
+			return result;
 		}
 
 		/**
