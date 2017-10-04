@@ -234,7 +234,7 @@ window.wp = window.wp || {};
 		function getShortcodeWrapperInfo( content, cursorPosition ) {
 			var contentShortcodes = getShortCodePositionsInText( content );
 
-			for ( var i = 0; i < contentShortcodes.length; i ++ ) {
+			for ( var i = 0; i < contentShortcodes.length; i++ ) {
 				var element = contentShortcodes[ i ];
 
 				if ( cursorPosition >= element.startIndex && cursorPosition <= element.endIndex ) {
