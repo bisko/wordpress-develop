@@ -344,6 +344,28 @@ window.wp = window.wp || {};
 				shortcodesDetails.push( shortcodeInfo );
 			}
 
+			/**
+			 * Get all URL matches, and treat them as embeds
+			 */
+			var urlRegexp = new RegExp(
+				'(^|[\\n\\r][\\n\\r]|<p>)(https?:\\/\\/[^\s"]+?)(<\\/p>\s*|[\\n\\r][\\n\\r]|$)', 'gi'
+			);
+
+			while ( shortcodeMatch = urlRegexp.exec( content ) ) {
+				shortcodeInfo = {
+					shortcodeName: 'url',
+					showAsPlainText: false,
+					startIndex: shortcodeMatch.index,
+					endIndex: shortcodeMatch.index + shortcodeMatch[ 0 ].length,
+					length: shortcodeMatch[ 0 ].length,
+					isPreviewable: true,
+					urlAtStartOfContent: shortcodeMatch[ 1 ] === '',
+					urlAtEndOfContent: shortcodeMatch[ 3 ] === ''
+				};
+
+				shortcodesDetails.push( shortcodeInfo );
+			}
+
 			return shortcodesDetails;
 		}
 
@@ -421,12 +443,22 @@ window.wp = window.wp || {};
 
 			var isCursorStartInShortcode = getShortcodeWrapperInfo( content, cursorStart );
 			if ( isCursorStartInShortcode && isCursorStartInShortcode.isPreviewable ) {
-				cursorStart = isCursorStartInShortcode.startIndex;
+				if (isCursorStartInShortcode.urlAtStartOfContent) {
+					cursorStart = isCursorStartInShortcode.endIndex;
+				}
+				else {
+					cursorStart = isCursorStartInShortcode.startIndex;
+				}
 			}
 
 			var isCursorEndInShortcode = getShortcodeWrapperInfo( content, cursorEnd );
 			if ( isCursorEndInShortcode && isCursorEndInShortcode.isPreviewable ) {
-				cursorEnd = isCursorEndInShortcode.endIndex;
+				if (isCursorEndInShortcode.urlAtEndOfContent) {
+					cursorEnd = isCursorEndInShortcode.startIndex;
+				}
+				else {
+					cursorEnd = isCursorEndInShortcode.endIndex;
+				}
 			}
 
 			return {
