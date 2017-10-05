@@ -345,7 +345,13 @@ window.wp = window.wp || {};
 			}
 
 			/**
-			 * Get all URL matches, and treat them as embeds
+			 * Get all URL matches, and treat them as embeds.
+			 *
+			 * Since there isn't a good way to detect if a URL by itself on a line is a previewable
+			 * object, it's best to treat all of them as such.
+			 *
+			 * This means that the selection will capture the whole URL, in a similar way shrotcodes
+			 * are treated.
 			 */
 			var urlRegexp = new RegExp(
 				'(^|[\\n\\r][\\n\\r]|<p>)(https?:\\/\\/[^\s"]+?)(<\\/p>\s*|[\\n\\r][\\n\\r]|$)', 'gi'
@@ -443,6 +449,14 @@ window.wp = window.wp || {};
 
 			var isCursorStartInShortcode = getShortcodeWrapperInfo( content, cursorStart );
 			if ( isCursorStartInShortcode && isCursorStartInShortcode.isPreviewable ) {
+				/**
+				 * If a URL is at the start or the end of the content,
+				 * the selection doesn't work, because it inserts a marker in the text,
+				 * which breaks the embedURL detection.
+				 *
+				 * The best way to avoid that and not modify the user content is to
+				 * adjust the cursor to either after or before URL.
+				 */
 				if (isCursorStartInShortcode.urlAtStartOfContent) {
 					cursorStart = isCursorStartInShortcode.endIndex;
 				}
