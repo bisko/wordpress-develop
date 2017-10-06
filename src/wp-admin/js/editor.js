@@ -100,7 +100,7 @@ window.wp = window.wp || {};
 				editorHeight = parseInt( textarea.style.height, 10 ) || 0;
 
 				// Save the selection
-				addHTMLBookmarkInTextAreaContent( $textarea, $ );
+				addHTMLBookmarkInTextAreaContent( $textarea );
 
 				if ( editor ) {
 					editor.show();
