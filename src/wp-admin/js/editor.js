@@ -101,11 +101,11 @@ window.wp = window.wp || {};
 
 				var keepSelection = false;
 				if (editor) {
-					keepSelection = editor.getParam( 'wp_keep_editor_selection' )
+					keepSelection = editor.getParam( 'wp_keep_scroll_position' )
 				}
 				else {
 					keepSelection = window.tinyMCEPreInit.mceInit[ id ] &&
-									window.tinyMCEPreInit.mceInit[ id ]['wp_keep_editor_selection']
+									window.tinyMCEPreInit.mceInit[ id ]['wp_keep_scroll_position']
 				}
 
 				if ( keepSelection ) {
@@ -127,7 +127,7 @@ window.wp = window.wp || {};
 						}
 					}
 
-					if ( editor.getParam( 'wp_keep_editor_selection' ) ) {
+					if ( editor.getParam( 'wp_keep_scroll_position' ) ) {
 						// Restore the selection
 						focusHTMLBookmarkInVisualEditor( editor );
 					}
@@ -164,7 +164,7 @@ window.wp = window.wp || {};
 
 					var selectionRange = null;
 
-					if ( editor.getParam( 'wp_keep_editor_selection' ) ) {
+					if ( editor.getParam( 'wp_keep_scroll_position' ) ) {
 						selectionRange = findBookmarkedPosition( editor );
 					}
 
@@ -853,16 +853,14 @@ window.wp = window.wp || {};
 				end = selection.end || selection.start;
 
 			if ( textArea.focus ) {
-				if ( editor.getParam( 'wp_keep_scroll_position' ) ) {
-					// focus and scroll to the position
-					setTimeout( function() {
-						if ( textArea.blur ) {
-							// defocus before focusing
-							textArea.blur();
-						}
-						textArea.focus();
-					}, 100 );
-				}
+				// focus and scroll to the position
+				setTimeout( function() {
+					if ( textArea.blur ) {
+						// defocus before focusing
+						textArea.blur();
+					}
+					textArea.focus();
+				}, 100 );
 
 				textArea.focus();
 			}
