@@ -602,13 +602,18 @@ window.wp = window.wp || {};
 			var elementTop = editor.$( element ).offset().top,
 				TinyMCEContentAreaTop = editor.$( editor.getContentAreaContainer() ).offset().top,
 
-				edTools = $( '#wp-content-editor-tools' ),
-				edToolsHeight = edTools.height(),
-				edToolsOffsetTop = edTools.offset().top,
-
 				toolbarHeight = getToolbarHeight( editor ),
 
-				windowHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight,
+				edTools = $( '#wp-content-editor-tools' ),
+				edToolsHeight = 0,
+				edToolsOffsetTop = 0;
+
+			if ( edTools.length ) {
+				edToolsHeight = edTools.height();
+				edToolsOffsetTop = edTools.offset().top;
+			}
+
+			var windowHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight,
 
 				selectionPosition = TinyMCEContentAreaTop + elementTop,
 				visibleAreaHeight = windowHeight - ( edToolsHeight + toolbarHeight );
