@@ -99,8 +99,19 @@ window.wp = window.wp || {};
 
 				editorHeight = parseInt( textarea.style.height, 10 ) || 0;
 
-				// Save the selection
-				addHTMLBookmarkInTextAreaContent( $textarea );
+				var keepSelection = false;
+				if (editor) {
+					keepSelection = editor.getParam( 'wp_keep_editor_selection' )
+				}
+				else {
+					keepSelection = window.tinyMCEPreInit.mceInit[ id ] &&
+									window.tinyMCEPreInit.mceInit[ id ]['wp_keep_editor_selection']
+				}
+
+				if ( keepSelection ) {
+					// Save the selection
+					addHTMLBookmarkInTextAreaContent( $textarea );
+				}
 
 				if ( editor ) {
 					editor.show();
@@ -116,8 +127,10 @@ window.wp = window.wp || {};
 						}
 					}
 
-					// Restore the selection
-					focusHTMLBookmarkInVisualEditor( editor );
+					if ( editor.getParam( 'wp_keep_editor_selection' ) ) {
+						// Restore the selection
+						focusHTMLBookmarkInVisualEditor( editor );
+					}
 				} else {
 					tinymce.init( window.tinyMCEPreInit.mceInit[ id ] );
 				}
@@ -132,7 +145,6 @@ window.wp = window.wp || {};
 					return false;
 				}
 
-				var selectionRange = null;
 				if ( editor ) {
 					// Don't resize the textarea in iOS. The iframe is forced to 100% height there, we shouldn't match it.
 					if ( ! tinymce.Env.iOS ) {
@@ -150,7 +162,11 @@ window.wp = window.wp || {};
 						}
 					}
 
-					selectionRange = findBookmarkedPosition( editor );
+					var selectionRange = null;
+
+					if ( editor.getParam( 'wp_keep_editor_selection' ) ) {
+						selectionRange = findBookmarkedPosition( editor );
+					}
 
 					editor.hide();
 
@@ -560,7 +576,9 @@ window.wp = window.wp || {};
 				}
 			}
 
-			scrollVisualModeToStartElement( editor, startNode );
+			if ( editor.getParam( 'wp_keep_scroll_position' ) ) {
+				scrollVisualModeToStartElement( editor, startNode );
+			}
 
 			removeSelectionMarker( startNode );
 			removeSelectionMarker( endNode );
@@ -835,14 +853,16 @@ window.wp = window.wp || {};
 				end = selection.end || selection.start;
 
 			if ( textArea.focus ) {
-				// focus and scroll to the position
-				setTimeout( function() {
-					if ( textArea.blur ) {
-						// defocus before focusing
-						textArea.blur();
-					}
-					textArea.focus();
-				}, 100 );
+				if ( editor.getParam( 'wp_keep_scroll_position' ) ) {
+					// focus and scroll to the position
+					setTimeout( function() {
+						if ( textArea.blur ) {
+							// defocus before focusing
+							textArea.blur();
+						}
+						textArea.focus();
+					}, 100 );
+				}
 
 				textArea.focus();
 			}
