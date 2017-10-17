@@ -100,7 +100,6 @@ window.wp = window.wp || {};
 				editorHeight = parseInt( textarea.style.height, 10 ) || 0;
 
 				var keepSelection = false;
-
 				if ( editor ) {
 					keepSelection = editor.getParam( 'wp_keep_scroll_position' );
 				} else {
@@ -358,34 +357,6 @@ window.wp = window.wp || {};
 					endIndex: shortcodeMatch.index + shortcodeMatch[0].length,
 					length: shortcodeMatch[0].length,
 					isPreviewable: isPreviewable
-				};
-
-				shortcodesDetails.push( shortcodeInfo );
-			}
-
-			/**
-			 * Get all URL matches, and treat them as embeds.
-			 *
-			 * Since there isn't a good way to detect if a URL by itself on a line is a previewable
-			 * object, it's best to treat all of them as such.
-			 *
-			 * This means that the selection will capture the whole URL, in a similar way shrotcodes
-			 * are treated.
-			 */
-			var urlRegexp = new RegExp(
-				'(^|[\\n\\r][\\n\\r]|<p>)(https?:\\/\\/[^\s"]+?)(<\\/p>\s*|[\\n\\r][\\n\\r]|$)', 'gi'
-			);
-
-			while ( shortcodeMatch = urlRegexp.exec( content ) ) {
-				shortcodeInfo = {
-					shortcodeName: 'url',
-					showAsPlainText: false,
-					startIndex: shortcodeMatch.index,
-					endIndex: shortcodeMatch.index + shortcodeMatch[ 0 ].length,
-					length: shortcodeMatch[ 0 ].length,
-					isPreviewable: true,
-					urlAtStartOfContent: shortcodeMatch[ 1 ] === '',
-					urlAtEndOfContent: shortcodeMatch[ 3 ] === ''
 				};
 
 				shortcodesDetails.push( shortcodeInfo );
