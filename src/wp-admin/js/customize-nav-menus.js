@@ -682,6 +682,10 @@
 
 			this.itemSectionHeight();
 
+			if ( api.section.has( 'publish_settings' ) ) {
+				api.section( 'publish_settings' ).collapse();
+			}
+
 			$( 'body' ).addClass( 'adding-menu-items' );
 
 			close = function() {
@@ -812,15 +816,10 @@
 				panel.saveManageColumnsState();
 			});
 
-			// Wait until after construction to patch the UI
-			_.defer( function () {
-
-				panel.contentContainer.find( '#accordion-section-menu_locations' ).prepend(
+			// Inject additional heading into the menu locations section's head container.
+			api.section( 'menu_locations', function( section ) {
+				section.headContainer.prepend(
 					wp.template( 'nav-menu-locations-header' )( api.Menus.data )
-				);
-
-				panel.contentContainer.find( '#accordion-section-add_menu .accordion-section-title' ).replaceWith(
-					wp.template( 'nav-menu-create-menu-section-title' )
 				);
 			} );
 		},
@@ -1163,7 +1162,12 @@
 		attachEvents: function() {
 			var section = this,
 				container = section.container,
-				contentContainer = section.contentContainer;
+				contentContainer = section.contentContainer,
+				navMenuSettingPattern = /^nav_menu\[/;
+
+			section.headContainer.find( '.accordion-section-title' ).replaceWith(
+				wp.template( 'nav-menu-create-menu-section-title' )
+			);
 
 			/*
 			 * We have to manually handle section expanded because we do not
@@ -1184,7 +1188,66 @@
 				event.preventDefault();
 			} );
 
-			api.Section.prototype.attachEvents.apply( this, arguments );
+			/**
+			 * Get number of non-deleted nav menus.
+			 *
+			 * @since 4.9.0
+			 * @returns {number} Count.
+			 */
+			function getNavMenuCount() {
+				var count = 0;
+				api.each( function( setting ) {
+					if ( navMenuSettingPattern.test( setting.id ) && false !== setting.get() ) {
+						count += 1;
+					}
+				} );
+				return count;
+			}
+
+			/**
+			 * Update visibility of notice to prompt users to create menus.
+			 *
+			 * @since 4.9.0
+			 * @returns {void}
+			 */
+			function updateNoticeVisibility() {
+				container.find( '.add-new-menu-notice' ).prop( 'hidden', getNavMenuCount() > 0 );
+			}
+
+			/**
+			 * Handle setting addition.
+			 *
+			 * @since 4.9.0
+			 * @param {wp.customize.Setting} setting - Added setting.
+			 * @returns {void}
+			 */
+			function addChangeEventListener( setting ) {
+				if ( navMenuSettingPattern.test( setting.id ) ) {
+					setting.bind( updateNoticeVisibility );
+					updateNoticeVisibility();
+				}
+			}
+
+			/**
+			 * Handle setting removal.
+			 *
+			 * @since 4.9.0
+			 * @param {wp.customize.Setting} setting - Removed setting.
+			 * @returns {void}
+			 */
+			function removeChangeEventListener( setting ) {
+				if ( navMenuSettingPattern.test( setting.id ) ) {
+					setting.unbind( updateNoticeVisibility );
+					updateNoticeVisibility();
+				}
+			}
+
+			api.each( addChangeEventListener );
+			api.bind( 'add', addChangeEventListener );
+			api.bind( 'removed', removeChangeEventListener );
+			updateNoticeVisibility();
+
+			api.Section.prototype.attachEvents.apply( section, arguments );
 		},
 
 		/**
@@ -1229,7 +1292,8 @@
 				menuLocationsControl = new api.controlConstructor.nav_menu_locations( menuLocationsControlId, {
 					section: section.id,
 					priority: 1,
-					menu_id: ''
+					menu_id: '',
+					isCreating: true
 				} );
 				api.control.add( menuLocationsControlId, menuLocationsControl );
 				menuLocationsControl.active.set( true );
@@ -2395,7 +2459,7 @@
 			this._setupAddition();
 			this._setupTitle();
 
-			// Add menu to Custom Menu widgets.
+			// Add menu to Navigation Menu widgets.
 			if ( menu ) {
 				name = displayNavMenuName( menu.name );
 
@@ -2445,7 +2509,7 @@
 				if ( false === to ) {
 					control._handleDeletion();
 				} else {
-					// Update names in the Custom Menu widgets.
+					// Update names in the Navigation Menu widgets.
 					name = displayNavMenuName( to.name );
 					api.control.each( function( widgetControl ) {
 						if ( ! widgetControl.extended( api.controlConstructor.widget_form ) || 'nav_menu' !== widgetControl.params.widget_id_base ) {
@@ -2587,7 +2651,7 @@
 				}
 			});
 
-			// Remove the menu from any Custom Menu widgets.
+			// Remove the menu from any Navigation Menu widgets.
 			api.control.each(function( widgetControl ) {
 				if ( ! widgetControl.extended( api.controlConstructor.widget_form ) || 'nav_menu' !== widgetControl.params.widget_id_base ) {
 					return;
@@ -2999,7 +3063,7 @@
 				// Add new control for the new menu.
 				api.section.add( newSection );
 
-				// Update the values for nav menus in Custom Menu controls.
+				// Update the values for nav menus in Navigation Menu controls.
 				api.control.each( function( setting ) {
 					if ( ! setting.extended( api.controlConstructor.widget_form ) || 'nav_menu' !== setting.params.widget_id_base ) {
 						return;

@@ -100,12 +100,12 @@ window.wp = window.wp || {};
 				editorHeight = parseInt( textarea.style.height, 10 ) || 0;
 
 				var keepSelection = false;
-				if (editor) {
-					keepSelection = editor.getParam( 'wp_keep_scroll_position' )
-				}
-				else {
+
+				if ( editor ) {
+					keepSelection = editor.getParam( 'wp_keep_scroll_position' );
+				} else {
 					keepSelection = window.tinyMCEPreInit.mceInit[ id ] &&
-									window.tinyMCEPreInit.mceInit[ id ]['wp_keep_scroll_position']
+									window.tinyMCEPreInit.mceInit[ id ].wp_keep_scroll_position;
 				}
 
 				if ( keepSelection ) {
@@ -268,11 +268,13 @@ window.wp = window.wp || {};
 			var shortcodes = content.match( /\[+([\w_-])+/g ),
 				result = [];
 
-			for ( var i = 0; i < shortcodes.length; i++ ) {
-				var shortcode = shortcodes[ i ].replace( /^\[+/g, '' );
-
-				if ( result.indexOf( shortcode ) === -1 ) {
-					result.push( shortcode );
+			if ( shortcodes ) {
+				for ( var i = 0; i < shortcodes.length; i++ ) {
+					var shortcode = shortcodes[ i ].replace( /^\[+/g, '' );
+	
+					if ( result.indexOf( shortcode ) === -1 ) {
+						result.push( shortcode );
+					}
 				}
 			}
 
@@ -320,7 +322,7 @@ window.wp = window.wp || {};
 		 * @param {string} content The content we want to scan for shortcodes
 		 */
 		function getShortCodePositionsInText( content ) {
-			var allShortcodes = getShortcodesInText( content );
+			var allShortcodes = getShortcodesInText( content ), shortcodeInfo;
 
 			if ( allShortcodes.length === 0 ) {
 				return [];
@@ -347,15 +349,44 @@ window.wp = window.wp || {};
 				 * In addition, if the shortcode will get rendered as plain text ( see above ),
 				 * we can treat it as text and use the selection markers in it.
 				 */
-				var isPreviewable = ! showAsPlainText && isShortcodePreviewable( shortcodeMatch[2] ),
-					shortcodeInfo = {
-						shortcodeName: shortcodeMatch[2],
-						showAsPlainText: showAsPlainText,
-						startIndex: shortcodeMatch.index,
-						endIndex: shortcodeMatch.index + shortcodeMatch[0].length,
-						length: shortcodeMatch[0].length,
-						isPreviewable: isPreviewable
-					};
+				var isPreviewable = ! showAsPlainText && isShortcodePreviewable( shortcodeMatch[2] );
+
+				shortcodeInfo = {
+					shortcodeName: shortcodeMatch[2],
+					showAsPlainText: showAsPlainText,
+					startIndex: shortcodeMatch.index,
+					endIndex: shortcodeMatch.index + shortcodeMatch[0].length,
+					length: shortcodeMatch[0].length,
+					isPreviewable: isPreviewable
+				};
+
+				shortcodesDetails.push( shortcodeInfo );
+			}
+
+			/**
+			 * Get all URL matches, and treat them as embeds.
+			 *
+			 * Since there isn't a good way to detect if a URL by itself on a line is a previewable
+			 * object, it's best to treat all of them as such.
+			 *
+			 * This means that the selection will capture the whole URL, in a similar way shrotcodes
+			 * are treated.
+			 */
+			var urlRegexp = new RegExp(
+				'(^|[\\n\\r][\\n\\r]|<p>)(https?:\\/\\/[^\s"]+?)(<\\/p>\s*|[\\n\\r][\\n\\r]|$)', 'gi'
+			);
+
+			while ( shortcodeMatch = urlRegexp.exec( content ) ) {
+				shortcodeInfo = {
+					shortcodeName: 'url',
+					showAsPlainText: false,
+					startIndex: shortcodeMatch.index,
+					endIndex: shortcodeMatch.index + shortcodeMatch[ 0 ].length,
+					length: shortcodeMatch[ 0 ].length,
+					isPreviewable: true,
+					urlAtStartOfContent: shortcodeMatch[ 1 ] === '',
+					urlAtEndOfContent: shortcodeMatch[ 3 ] === ''
+				};
 
 				shortcodesDetails.push( shortcodeInfo );
 			}
@@ -452,8 +483,7 @@ window.wp = window.wp || {};
 				 */
 				if ( voidElements.indexOf( isCursorStartInTag.tagType ) !== -1 ) {
 					cursorStart = isCursorStartInTag.ltPos;
-				}
-				else {
+				} else {
 					cursorStart = isCursorStartInTag.gtPos;
 				}
 			}
@@ -473,20 +503,18 @@ window.wp = window.wp || {};
 				 * The best way to avoid that and not modify the user content is to
 				 * adjust the cursor to either after or before URL.
 				 */
-				if (isCursorStartInShortcode.urlAtStartOfContent) {
+				if ( isCursorStartInShortcode.urlAtStartOfContent ) {
 					cursorStart = isCursorStartInShortcode.endIndex;
-				}
-				else {
+				} else {
 					cursorStart = isCursorStartInShortcode.startIndex;
 				}
 			}
 
 			var isCursorEndInShortcode = getShortcodeWrapperInfo( content, cursorEnd );
 			if ( isCursorEndInShortcode && isCursorEndInShortcode.isPreviewable ) {
-				if (isCursorEndInShortcode.urlAtEndOfContent) {
+				if ( isCursorEndInShortcode.urlAtEndOfContent ) {
 					cursorEnd = isCursorEndInShortcode.startIndex;
-				}
-				else {
+				} else {
 					cursorEnd = isCursorEndInShortcode.endIndex;
 				}
 			}
