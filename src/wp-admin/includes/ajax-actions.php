@@ -3023,7 +3023,12 @@ function wp_ajax_parse_embed() {
 
 	$parsed = false;
 
-	if ( (int) $_POST['post_ID'] && $post = get_post( (int) $_POST['post_ID'] ) ) {
+	$post_ID = (int) $_POST[ 'post_ID' ];
+	if ( $post_ID && $post = get_post( $post_ID ) ) {
+		if ( ! current_user_can( 'edit_post', $post_ID ) ) {
+			wp_send_json_error();
+		}
+
 		setup_postdata( $post );
 	}
 
