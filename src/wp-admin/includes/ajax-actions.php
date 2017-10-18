@@ -3025,7 +3025,7 @@ function wp_ajax_parse_embed() {
 
 	$post_ID = (int) $_POST[ 'post_ID' ];
 	if ( $post_ID && $post = get_post( $post_ID ) ) {
-		if ( ! current_user_can( 'edit_post', $post_ID ) ) {
+		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
 			wp_send_json_error();
 		}
 
